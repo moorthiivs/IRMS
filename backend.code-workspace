@@ -8,6 +8,12 @@
 		},
 		{
 			"path": "Documents"
+		},
+		{
+			"path": ".git"
+		},
+		{
+			"path": ".github"
 		}
 	]
 }
