@@ -1,0 +1,6 @@
+node_modules
+dist
+.env
+android/app/build/
+ios/App/App/build/
+.DS_Store

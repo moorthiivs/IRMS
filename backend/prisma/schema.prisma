@@ -1,0 +1,176 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  INSPECTOR
+}
+
+enum ValidationStatus {
+  PASS
+  FAIL
+}
+
+enum TransactionStatus {
+  PASSED
+  REJECTED
+}
+
+enum UploadStatus {
+  SUCCESS
+  FAILED
+  PARTIAL
+}
+
+model User {
+  id           String        @id @default(uuid())
+  username     String        @unique
+  passwordHash String
+  name         String
+  role         Role          @default(INSPECTOR)
+  signature    String?       // Base64 encoded signature image drawn via signature pad
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  transactions InspectionTransaction[]
+  approvals    InspectionTransaction[] @relation("ApprovedBy")
+  uploads      UploadHistory[]
+  drafts       InspectionDraft[]
+}
+
+model Shift {
+  id           String        @id @default(uuid())
+  name         String        @unique // e.g., "Shift A", "Shift B"
+  startTime    String        // "HH:mm" (e.g., "06:00")
+  endTime      String        // "HH:mm" (e.g., "14:00")
+  transactions InspectionTransaction[]
+}
+
+model Part {
+  id           String        @id @default(uuid())
+  partNumber   String        @unique // e.g., "PART-9904-X"
+  partName     String
+  operations   PartOperation[]
+  parameters   InspectionParameter[]
+  transactions InspectionTransaction[]
+  drafts       InspectionDraft[]
+}
+
+model Operation {
+  id              String        @id @default(uuid())
+  operationNumber String        @unique // e.g., "OP-20"
+  operationName   String
+  parts           PartOperation[]
+  parameters      InspectionParameter[]
+  transactions    InspectionTransaction[]
+  drafts          InspectionDraft[]
+}
+
+model PartOperation {
+  id          String    @id @default(uuid())
+  partId      String
+  operationId String
+  part        Part      @relation(fields: [partId], references: [id], onDelete: Cascade)
+  operation   Operation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+
+  @@unique([partId, operationId])
+}
+
+model InspectionParameter {
+  id                  String             @id @default(uuid())
+  partId              String
+  operationId         String
+  parameterName       String
+  nominalValue        String?            // Nominal value (string to support text nominals like "Rz" or "M6x1.0")
+  lowerTolerance      String?            // Lower tolerance (string to support non-numeric or blank like "-0.05")
+  upperTolerance      String?            // Upper tolerance (string to support non-numeric or blank like "0.05")
+  specText            String?            // Full SPEC text representation e.g. "61.00±0.200" or "Rz 3.2 max."
+  controlLimitMin     Float?             // Numeric minimum limit if applicable (e.g. 60.8)
+  controlLimitMax     Float?             // Numeric maximum limit if applicable (e.g. 61.2)
+  methodOfChecking    String?            // E.g., "Air gauge", "Vernier"
+  freqOfInspn         String?            // E.g., "4nos/shift", "1no/shift"
+  leastCount          Float?             // Least count (measurement precision) e.g., 0.01, 0.001
+  class               String?            // E.g., "SC" or null
+  sequence            Int                @default(0) // Sorting order
+  part                Part               @relation(fields: [partId], references: [id], onDelete: Cascade)
+  operation           Operation          @relation(fields: [operationId], references: [id], onDelete: Cascade)
+  details             InspectionDetail[]
+
+  @@unique([partId, operationId, parameterName])
+}
+
+model InspectionTransaction {
+  id                  String             @id @default(uuid())
+  inspectorId         String
+  shiftId             String?
+  partId              String
+  operationId         String
+  lotNumber           String             // Batch/Lot Number
+  mcNo                String?            // Machine Number e.g. CNC80
+  intervalName        String             // "1 Half" or "2 Half" (or direct interval index)
+  inspectionTimestamp DateTime           @default(now())
+  status              TransactionStatus  // PASSED or REJECTED
+  remarks             String?
+  approvedById        String?            // Admin who approved the report
+  approvedAt          DateTime?          // When the report was approved
+  inspector           User               @relation(fields: [inspectorId], references: [id])
+  approvedBy          User?              @relation("ApprovedBy", fields: [approvedById], references: [id])
+  shift               Shift?             @relation(fields: [shiftId], references: [id])
+  part                Part               @relation(fields: [partId], references: [id])
+  operation           Operation          @relation(fields: [operationId], references: [id])
+  details             InspectionDetail[]
+}
+
+model InspectionDetail {
+  id            String              @id @default(uuid())
+  transactionId String
+  parameterId   String
+  observedValue String              // Entered value as string to support "ok"/"ng" or numbers
+  status        ValidationStatus    // PASS or FAIL
+  transaction   InspectionTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  parameter     InspectionParameter   @relation(fields: [parameterId], references: [id])
+}
+
+model UploadHistory {
+  id              String       @id @default(uuid())
+  filename        String
+  uploadedById    String
+  uploadTimestamp DateTime     @default(now())
+  status          UploadStatus
+  totalRecords    Int
+  importedRecords Int
+  errorLog        String?      // Stores JSON list of validation failures
+  uploadedBy      User         @relation(fields: [uploadedById], references: [id])
+}
+
+model SystemSettings {
+  id    String @id @default("default")
+  key   String @unique
+  value String
+}
+
+model InspectionDraft {
+  id              String   @id @default(uuid())
+  userId          String
+  partId          String
+  operationId     String
+  shiftId         String?
+  intervalName    String?
+  mcNo            String?
+  lotNumber       String?
+  remarks         String?
+  readingsData    String   // JSON string of { [key]: value }
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User      @relation(fields: [userId], references: [id])
+  part            Part      @relation(fields: [partId], references: [id])
+  operation       Operation @relation(fields: [operationId], references: [id])
+
+  @@unique([userId, partId, operationId])
+}

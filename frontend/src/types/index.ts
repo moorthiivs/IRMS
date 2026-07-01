@@ -1,0 +1,105 @@
+export interface User {
+  id: string;
+  username: string;
+  name: string;
+  role: 'ADMIN' | 'INSPECTOR';
+  signature?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Shift {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+}
+
+export interface Part {
+  id: string;
+  partNumber: string;
+  partName: string;
+}
+
+export interface Operation {
+  id: string;
+  operationNumber: string;
+  operationName: string;
+}
+
+export interface OperationWithCount extends Operation {
+  parameterCount: number;
+}
+
+export interface PartWithOperations {
+  id: string;
+  partNumber: string;
+  partName: string;
+  operations: OperationWithCount[];
+}
+
+export interface InspectionParameter {
+  id: string;
+  partId: string;
+  operationId: string;
+  parameterName: string;
+  nominalValue: string | null;
+  lowerTolerance: string | null;
+  upperTolerance: string | null;
+  specText: string | null;
+  controlLimitMin: number | null;
+  controlLimitMax: number | null;
+  methodOfChecking: string | null;
+  freqOfInspn: string | null;
+  leastCount: number | null;
+  class: string | null;
+  sequence: number;
+}
+
+export interface InspectionTransaction {
+  id: string;
+  inspectorId: string;
+  shiftId: string;
+  partId: string;
+  operationId: string;
+  lotNumber: string;
+  mcNo: string | null;
+  intervalName: string;
+  inspectionTimestamp: string;
+  status: 'PASSED' | 'REJECTED';
+  remarks: string | null;
+  approvedById?: string | null;
+  approvedAt?: string | null;
+  inspector?: User;
+  approvedBy?: User | null;
+  shift?: Shift;
+  part?: Part;
+  operation?: Operation;
+  details?: InspectionDetail[];
+}
+
+export interface InspectionDetail {
+  id: string;
+  transactionId: string;
+  parameterId: string;
+  observedValue: string;
+  status: 'PASS' | 'FAIL';
+  parameter?: InspectionParameter;
+}
+
+export interface UploadHistory {
+  id: string;
+  filename: string;
+  uploadedById: string;
+  uploadTimestamp: string;
+  status: 'SUCCESS' | 'FAILED' | 'PARTIAL';
+  totalRecords: number;
+  importedRecords: number;
+  errorLog: string | null;
+  uploadedBy?: User;
+}
+
+export interface AuthResponse {
+  access_token: string;
+}
+
