@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">irms-frontend</string>
-    <string name="title_activity_main">irms-frontend</string>
+    <string name="app_name">IRMS</string>
+    <string name="title_activity_main">IRMS</string>
     <string name="package_name">com.irms.app</string>
     <string name="custom_url_scheme">com.irms.app</string>
 </resources>
