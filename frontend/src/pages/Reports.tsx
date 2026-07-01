@@ -12,6 +12,7 @@ import { masterDataService } from '../services/master-data.service';
 import { useAuthStore } from '../store/auth-store';
 import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
+import { TableSkeleton } from '../components/TableSkeleton';
 
 function parseSpecText(specText: string | null): [string, string, string] {
   if (!specText) return ['', '', ''];
@@ -85,7 +86,7 @@ export function Reports() {
   const [reviewedChecked, setReviewedChecked] = useState(false);
 
   // 1. Transaction History Query
-  const { data: recent = [] } = useQuery({
+  const { data: recent = [], isLoading: isRecentLoading } = useQuery({
     queryKey: ['recent-inspections', filterStatus, filterApproval],
     queryFn: () => inspectionService.getRecent({ status: filterStatus, approval: filterApproval }),
   });
@@ -422,60 +423,64 @@ export function Reports() {
             </Paper>
           )}
           <Paper withBorder p="md" radius="md">
-            <div className="overflow-x-auto">
-              <Table striped highlightOnHover style={{ minWidth: 900 }}>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Date & Time</Table.Th>
-                  <Table.Th>Part / Operation</Table.Th>
-                  <Table.Th>Shift</Table.Th>
-                  <Table.Th>Lot No</Table.Th>
-                  <Table.Th>Inspector</Table.Th>
-                  <Table.Th>Status</Table.Th>
-                  <Table.Th style={{ minWidth: 120 }}>Actions</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {recent.map((item) => (
-                  <Table.Tr key={item.id}>
-                    <Table.Td>{new Date(item.inspectionTimestamp).toLocaleString()}</Table.Td>
-                    <Table.Td>{item.part?.partNumber} / {item.operation?.operationNumber}</Table.Td>
-                    <Table.Td>{item.shift?.name}</Table.Td>
-                    <Table.Td>{item.lotNumber}</Table.Td>
-                    <Table.Td>{item.inspector?.name}</Table.Td>
-                    <Table.Td>
-                      <Badge color={item.status === 'PASSED' ? 'green' : 'red'}>
-                        {item.status}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>
-                      <Group gap="xs" wrap="nowrap">
-                        <ActionIcon variant="light" color="blue" onClick={() => navigate(`/reports/${item.id}`)}>
-                          <Eye size={16} />
-                        </ActionIcon>
-                        <ActionIcon variant="light" color="gray" onClick={() => navigate(`/reports/${item.id}`)}>
-                          <Printer size={16} />
-                        </ActionIcon>
-                        {!item.approvedById && isAdmin && (
-                          <ActionIcon
-                            variant="light"
-                            color="violet"
-                            onClick={() => {
-                              setApprovalId(item.id);
-                              setReviewedChecked(false);
-                            }}
-                            loading={approveMutation.isPending && approvalId === item.id}
-                          >
-                            <FileCheck size={16} />
-                          </ActionIcon>
-                        )}
-                      </Group>
-                    </Table.Td>
+            {isRecentLoading ? (
+              <TableSkeleton rows={8} />
+            ) : (
+              <div className="overflow-x-auto">
+                <Table striped highlightOnHover style={{ minWidth: 900 }}>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Date & Time</Table.Th>
+                    <Table.Th>Part / Operation</Table.Th>
+                    <Table.Th>Shift</Table.Th>
+                    <Table.Th>Lot No</Table.Th>
+                    <Table.Th>Inspector</Table.Th>
+                    <Table.Th>Status</Table.Th>
+                    <Table.Th style={{ minWidth: 120 }}>Actions</Table.Th>
                   </Table.Tr>
-                ))}
-              </Table.Tbody>
-              </Table>
-            </div>
+                </Table.Thead>
+                <Table.Tbody>
+                  {recent.map((item) => (
+                    <Table.Tr key={item.id}>
+                      <Table.Td>{new Date(item.inspectionTimestamp).toLocaleString()}</Table.Td>
+                      <Table.Td>{item.part?.partNumber} / {item.operation?.operationNumber}</Table.Td>
+                      <Table.Td>{item.shift?.name}</Table.Td>
+                      <Table.Td>{item.lotNumber}</Table.Td>
+                      <Table.Td>{item.inspector?.name}</Table.Td>
+                      <Table.Td>
+                        <Badge color={item.status === 'PASSED' ? 'green' : 'red'}>
+                          {item.status}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Group gap="xs" wrap="nowrap">
+                          <ActionIcon variant="light" color="blue" onClick={() => navigate(`/reports/${item.id}`)}>
+                            <Eye size={16} />
+                          </ActionIcon>
+                          <ActionIcon variant="light" color="gray" onClick={() => navigate(`/reports/${item.id}`)}>
+                            <Printer size={16} />
+                          </ActionIcon>
+                          {!item.approvedById && isAdmin && (
+                            <ActionIcon
+                              variant="light"
+                              color="violet"
+                              onClick={() => {
+                                setApprovalId(item.id);
+                                setReviewedChecked(false);
+                              }}
+                              loading={approveMutation.isPending && approvalId === item.id}
+                            >
+                              <FileCheck size={16} />
+                            </ActionIcon>
+                          )}
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+                </Table>
+              </div>
+            )}
           </Paper>
         </Tabs.Panel>
 

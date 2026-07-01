@@ -13,6 +13,7 @@ import { masterDataService } from '../services/master-data.service';
 import { notifications } from '@mantine/notifications';
 import { PartWithOperations, InspectionParameter } from '../types';
 import { ExcelUpload } from './ExcelUpload';
+import { TableSkeleton } from '../components/TableSkeleton';
 
 export function MasterData() {
   const queryClient = useQueryClient();
@@ -102,9 +103,7 @@ export function MasterData() {
 
           <Paper withBorder radius="md">
             {isLoading ? (
-              <Group justify="center" p="xl">
-                <Loader size="sm" />
-              </Group>
+              <div className="p-4"><TableSkeleton rows={6} /></div>
             ) : (
               <div className="overflow-x-auto">
                 <Table striped highlightOnHover style={{ minWidth: 700 }}>
@@ -394,11 +393,7 @@ function ParameterEditor({
   };
 
   if (isLoading) {
-    return (
-      <Group justify="center" p="xl">
-        <Loader />
-      </Group>
-    );
+    return <div className="p-4"><TableSkeleton rows={5} /></div>;
   }
 
   return (

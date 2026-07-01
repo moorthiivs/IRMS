@@ -11,6 +11,7 @@ import { Check, Save, X, AlertTriangle } from 'lucide-react';
 import { masterDataService } from '../services/master-data.service';
 import { inspectionService } from '../services/inspection.service';
 import { CheckCircle2, XCircle } from 'lucide-react';
+import { TableSkeleton } from '../components/TableSkeleton';
 
 export function InspectionEntry() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -88,7 +89,7 @@ export function InspectionEntry() {
     enabled: !!selectedPart
   });
 
-  const { data: parameters = [] } = useQuery({
+  const { data: parameters = [], isLoading: isParamsLoading } = useQuery({
     queryKey: ['parameters', selectedPart, selectedOp],
     queryFn: () => masterDataService.getParameters(selectedPart!, selectedOp!),
     enabled: !!selectedPart && !!selectedOp
@@ -385,7 +386,11 @@ export function InspectionEntry() {
         </Paper>
       )}
 
-      {parameters.length > 0 && (
+      {isParamsLoading ? (
+        <Paper withBorder p="md" radius="md">
+           <TableSkeleton rows={4} />
+        </Paper>
+      ) : parameters.length > 0 && (
         <Paper withBorder p={0} radius="md" className="overflow-hidden">
           <div className="overflow-x-auto">
             <Table striped highlightOnHover verticalSpacing="md" style={{ minWidth: 800 }}>

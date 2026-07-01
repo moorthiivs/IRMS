@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Title, SimpleGrid, Paper, Text, Group, Select, Button, Table, Badge } from '@mantine/core';
+import { Title, SimpleGrid, Paper, Text, Group, Select, Button, Table, Badge, Skeleton } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { ClipboardCheck, CheckCircle2, XCircle, Clock, Play, FileCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -7,6 +7,7 @@ import Chart from 'react-apexcharts';
 import { inspectionService } from '../services/inspection.service';
 import { masterDataService } from '../services/master-data.service';
 import { useAuthStore } from '../store/auth-store';
+import { TableSkeleton } from '../components/TableSkeleton';
 
 export function Dashboard() {
   const { user } = useAuthStore();
@@ -118,9 +119,9 @@ export function Dashboard() {
             </Group>
 
             <Group align="flex-end" gap="xs" mt={25}>
-              <Text className="text-3xl font-bold">
-                {isLoading ? '...' : stat.value}
-              </Text>
+              <div className="text-3xl font-bold">
+                {isLoading ? <Skeleton height={36} width={60} radius="sm" /> : stat.value}
+              </div>
             </Group>
           </Paper>
         ))}
@@ -130,7 +131,7 @@ export function Dashboard() {
         <Paper withBorder p="md" radius="md" style={{ minHeight: 350 }}>
           <Title order={4} mb="md">Recent Activity (Last 7 Days)</Title>
           {isLoading ? (
-            <Text c="dimmed" size="sm">Loading chart...</Text>
+            <Skeleton height={260} radius="md" />
           ) : data?.recentActivity ? (
             <div style={{ width: '100%', height: 260 }}>
               <Chart
@@ -148,7 +149,7 @@ export function Dashboard() {
         <Paper withBorder p="md" radius="md" style={{ minHeight: 350 }}>
           <Title order={4} mb="md">Shift Summary (Today)</Title>
           {isLoading ? (
-            <Text c="dimmed" size="sm">Loading summary...</Text>
+            <div className="p-4"><TableSkeleton rows={3} /></div>
           ) : data?.shiftSummary && Object.keys(data.shiftSummary).length > 0 ? (
             <div className="overflow-x-auto">
               <Table striped highlightOnHover verticalSpacing="sm">

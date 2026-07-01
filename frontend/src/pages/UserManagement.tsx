@@ -11,6 +11,7 @@ import { usersService } from '../services/users.service';
 import { notifications } from '@mantine/notifications';
 import { User } from '../types';
 import SignaturePad from 'signature_pad';
+import { TableSkeleton } from '../components/TableSkeleton';
 
 export function UserManagement() {
   const queryClient = useQueryClient();
@@ -120,91 +121,89 @@ export function UserManagement() {
       </Group>
 
       <Paper withBorder radius="md">
-        <div className="overflow-x-auto">
-          <Table striped highlightOnHover style={{ minWidth: 700 }}>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Name</Table.Th>
-                <Table.Th>Username</Table.Th>
-                <Table.Th>Role</Table.Th>
-                <Table.Th>Signature</Table.Th>
-                <Table.Th style={{ minWidth: 120 }}>Actions</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {isLoading ? (
+        {isLoading ? (
+          <div className="p-4"><TableSkeleton rows={5} /></div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table striped highlightOnHover style={{ minWidth: 700 }}>
+              <Table.Thead>
                 <Table.Tr>
-                  <Table.Td colSpan={5} style={{ textAlign: 'center', padding: 32 }}>
-                    <Loader size="sm" />
-                  </Table.Td>
+                  <Table.Th>Name</Table.Th>
+                  <Table.Th>Username</Table.Th>
+                  <Table.Th>Role</Table.Th>
+                  <Table.Th>Signature</Table.Th>
+                  <Table.Th style={{ minWidth: 120 }}>Actions</Table.Th>
                 </Table.Tr>
-              ) : users.length === 0 ? (
-                <Table.Tr>
-                  <Table.Td colSpan={5} style={{ textAlign: 'center', padding: 32, color: '#868e96' }}>
-                    No users found.
-                  </Table.Td>
-                </Table.Tr>
-              ) : (
-                users.map((user) => (
-                  <Table.Tr key={user.id}>
-                    <Table.Td>
-                      <Group gap="sm">
-                        <Avatar color={user.role === 'ADMIN' ? 'violet' : 'blue'} radius="xl" size="sm">
-                          {user.name.charAt(0)}
-                        </Avatar>
-                        <Text fw={500}>{user.name}</Text>
-                      </Group>
-                    </Table.Td>
-                    <Table.Td>{user.username}</Table.Td>
-                    <Table.Td>
-                      <Badge color={user.role === 'ADMIN' ? 'violet' : 'blue'} variant="light">
-                        {user.role}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>
-                      {user.signature ? (
-                        <img
-                          src={user.signature}
-                          alt="Signature"
-                          style={{ height: 30, background: '#f8f9fa', borderRadius: 4, border: '1px solid #dee2e6' }}
-                        />
-                      ) : (
-                        <Text size="xs" c="dimmed">Not set</Text>
-                      )}
-                    </Table.Td>
-                    <Table.Td>
-                      <Group gap={4} wrap="nowrap">
-                        <Tooltip label="Edit User">
-                          <ActionIcon variant="subtle" color="blue" onClick={() => openEditModal(user)}>
-                            <Edit size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                        <Tooltip label="Draw Signature">
-                          <ActionIcon variant="subtle" color="green" onClick={() => setSigUser(user)}>
-                            <PenTool size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                        <Tooltip label="Delete User">
-                          <ActionIcon
-                            variant="subtle"
-                            color="red"
-                            onClick={() => {
-                              if (confirm(`Delete user "${user.name}"?`)) {
-                                deleteMutation.mutate(user.id);
-                              }
-                            }}
-                          >
-                            <Trash2 size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                      </Group>
+              </Table.Thead>
+              <Table.Tbody>
+                {users.length === 0 ? (
+                  <Table.Tr>
+                    <Table.Td colSpan={5} style={{ textAlign: 'center', padding: 32, color: '#868e96' }}>
+                      No users found.
                     </Table.Td>
                   </Table.Tr>
-                ))
-              )}
-            </Table.Tbody>
-          </Table>
-        </div>
+                ) : (
+                  users.map((user) => (
+                    <Table.Tr key={user.id}>
+                      <Table.Td>
+                        <Group gap="sm">
+                          <Avatar color={user.role === 'ADMIN' ? 'violet' : 'blue'} radius="xl" size="sm">
+                            {user.name.charAt(0)}
+                          </Avatar>
+                          <Text fw={500}>{user.name}</Text>
+                        </Group>
+                      </Table.Td>
+                      <Table.Td>{user.username}</Table.Td>
+                      <Table.Td>
+                        <Badge color={user.role === 'ADMIN' ? 'violet' : 'blue'} variant="light">
+                          {user.role}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        {user.signature ? (
+                          <img
+                            src={user.signature}
+                            alt="Signature"
+                            style={{ height: 30, background: '#f8f9fa', borderRadius: 4, border: '1px solid #dee2e6' }}
+                          />
+                        ) : (
+                          <Text size="xs" c="dimmed">Not set</Text>
+                        )}
+                      </Table.Td>
+                      <Table.Td>
+                        <Group gap={4} wrap="nowrap">
+                          <Tooltip label="Edit User">
+                            <ActionIcon variant="subtle" color="blue" onClick={() => openEditModal(user)}>
+                              <Edit size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label="Draw Signature">
+                            <ActionIcon variant="subtle" color="green" onClick={() => setSigUser(user)}>
+                              <PenTool size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label="Delete User">
+                            <ActionIcon
+                              variant="subtle"
+                              color="red"
+                              onClick={() => {
+                                if (confirm(`Delete user "${user.name}"?`)) {
+                                  deleteMutation.mutate(user.id);
+                                }
+                              }}
+                            >
+                              <Trash2 size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))
+                )}
+              </Table.Tbody>
+            </Table>
+          </div>
+        )}
       </Paper>
 
       {/* Create User Modal */}

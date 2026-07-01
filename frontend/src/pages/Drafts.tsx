@@ -5,12 +5,13 @@ import { useNavigate } from 'react-router-dom';
 import { inspectionService } from '../services/inspection.service';
 import { notifications } from '@mantine/notifications';
 import { format } from 'date-fns';
+import { TableSkeleton } from '../components/TableSkeleton';
 
 export function Drafts() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: drafts = [] } = useQuery({
+  const { data: drafts = [], isLoading } = useQuery({
     queryKey: ['drafts'],
     queryFn: inspectionService.getDrafts
   });
@@ -38,57 +39,61 @@ export function Drafts() {
       <Title order={2}>Saved Drafts</Title>
       
       <Paper shadow="sm" radius="md" withBorder className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table verticalSpacing="sm" striped highlightOnHover style={{ minWidth: 700 }}>
-            <Table.Thead className="bg-gray-50">
-              <Table.Tr>
-                <Table.Th>Saved On</Table.Th>
-                <Table.Th>Part Number</Table.Th>
-                <Table.Th>Operation</Table.Th>
-                <Table.Th>Shift</Table.Th>
-                <Table.Th>Interval</Table.Th>
-                <Table.Th style={{ minWidth: 120 }}>Actions</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {drafts.length === 0 ? (
+        {isLoading ? (
+          <div className="p-4"><TableSkeleton rows={4} /></div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table verticalSpacing="sm" striped highlightOnHover style={{ minWidth: 700 }}>
+              <Table.Thead className="bg-gray-50">
                 <Table.Tr>
-                  <Table.Td colSpan={6}>
-                    <Text c="dimmed" ta="center" py="xl">
-                      No saved drafts found.
-                    </Text>
-                  </Table.Td>
+                  <Table.Th>Saved On</Table.Th>
+                  <Table.Th>Part Number</Table.Th>
+                  <Table.Th>Operation</Table.Th>
+                  <Table.Th>Shift</Table.Th>
+                  <Table.Th>Interval</Table.Th>
+                  <Table.Th style={{ minWidth: 120 }}>Actions</Table.Th>
                 </Table.Tr>
-              ) : (
-                drafts.map((draft: any) => (
-                  <Table.Tr key={draft.id}>
-                    <Table.Td>
-                      {format(new Date(draft.updatedAt), 'dd MMM yyyy, HH:mm')}
-                    </Table.Td>
-                    <Table.Td>
-                      <Text fw={500}>{draft.part?.partNumber}</Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge variant="light">{draft.operation?.operationNumber}</Badge>
-                    </Table.Td>
-                    <Table.Td>{draft.shiftId || '-'}</Table.Td>
-                    <Table.Td>{draft.intervalName || '-'}</Table.Td>
-                    <Table.Td>
-                      <Group gap="sm" wrap="nowrap">
-                        <Button size="xs" variant="light" leftSection={<Edit size={14} />} onClick={() => handleResume(draft)}>
-                          Resume
-                        </Button>
-                        <ActionIcon variant="subtle" color="red" onClick={() => handleDelete(draft.id)}>
-                          <Trash2 size={16} />
-                        </ActionIcon>
-                      </Group>
+              </Table.Thead>
+              <Table.Tbody>
+                {drafts.length === 0 ? (
+                  <Table.Tr>
+                    <Table.Td colSpan={6}>
+                      <Text c="dimmed" ta="center" py="xl">
+                        No saved drafts found.
+                      </Text>
                     </Table.Td>
                   </Table.Tr>
-                ))
-              )}
-            </Table.Tbody>
-          </Table>
-        </div>
+                ) : (
+                  drafts.map((draft: any) => (
+                    <Table.Tr key={draft.id}>
+                      <Table.Td>
+                        {format(new Date(draft.updatedAt), 'dd MMM yyyy, HH:mm')}
+                      </Table.Td>
+                      <Table.Td>
+                        <Text fw={500}>{draft.part?.partNumber}</Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge variant="light">{draft.operation?.operationNumber}</Badge>
+                      </Table.Td>
+                      <Table.Td>{draft.shiftId || '-'}</Table.Td>
+                      <Table.Td>{draft.intervalName || '-'}</Table.Td>
+                      <Table.Td>
+                        <Group gap="sm" wrap="nowrap">
+                          <Button size="xs" variant="light" leftSection={<Edit size={14} />} onClick={() => handleResume(draft)}>
+                            Resume
+                          </Button>
+                          <ActionIcon variant="subtle" color="red" onClick={() => handleDelete(draft.id)}>
+                            <Trash2 size={16} />
+                          </ActionIcon>
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))
+                )}
+              </Table.Tbody>
+            </Table>
+          </div>
+        )}
       </Paper>
     </div>
   );
