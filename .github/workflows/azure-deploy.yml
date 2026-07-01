@@ -1,0 +1,76 @@
+name: Build and Deploy to Azure
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java (for Android SDK)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # --- Frontend & APK Build ---
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm install
+
+      - name: Build Frontend Web App
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Sync Capacitor
+        working-directory: ./frontend
+        run: npx cap sync android
+
+      - name: Build Android APK
+        working-directory: ./frontend/android
+        run: ./gradlew assembleDebug
+
+      - name: Copy APK to Web App Public Folder
+        run: |
+          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk frontend/dist/irms.apk
+
+      # --- Backend Build & Package ---
+      - name: Install Backend Dependencies
+        working-directory: ./backend
+        run: npm install
+
+      - name: Build Backend
+        working-directory: ./backend
+        run: npm run build
+        
+      - name: Prepare Deployment Artifact
+        run: |
+          # Copy frontend dist to backend client directory as expected by NestJS ServeStatic
+          mkdir -p backend/client
+          cp -r frontend/dist/* backend/client/
+          
+          # Create deployment zip (Azure Linux App Service uses zip deploy)
+          cd backend
+          zip -r ../deploy.zip dist client prisma package.json package-lock.json tsconfig.json tsconfig.build.json
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'IRMS'
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: deploy.zip
