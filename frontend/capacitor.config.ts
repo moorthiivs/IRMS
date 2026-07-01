@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.irms.app',
-  appName: 'irms-frontend',
+  appName: 'IRMS',
   webDir: 'dist'
 };
 
