@@ -2,7 +2,7 @@ import axios from 'axios';
 import { useAuthStore } from '../store/auth-store';
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: 'https://irms-gzasfnghh6g2b3hu.centralindia-01.azurewebsites.net/api',
   headers: {
     'Content-Type': 'application/json',
   },
