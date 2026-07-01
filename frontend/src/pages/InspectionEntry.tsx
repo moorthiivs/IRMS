@@ -2,15 +2,17 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
   Paper, Title, Group, Select, TextInput, Button, 
-  Table, Badge, Textarea, Affix, Transition, Text, Autocomplete, SimpleGrid
+  Table, Badge, Textarea, Affix, Transition, Text, Autocomplete, SimpleGrid,
+  Progress, Card
 } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { Check, Save, X, AlertTriangle } from 'lucide-react';
 import { masterDataService } from '../services/master-data.service';
 import { inspectionService } from '../services/inspection.service';
-import { CheckCircle2, XCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, ArrowLeft, ArrowRight } from 'lucide-react';
 import { TableSkeleton } from '../components/TableSkeleton';
 
 export function InspectionEntry() {
@@ -21,6 +23,8 @@ export function InspectionEntry() {
   const [selectedPart, setSelectedPart] = useState<string | null>(queryPart);
   const [selectedOp, setSelectedOp] = useState<string | null>(queryOp);
   const [submitting, setSubmitting] = useState(false);
+  const [activeStep, setActiveStep] = useState(0);
+  const isMobile = useMediaQuery('(max-width: 768px)');
 
   useEffect(() => {
     if (queryPart) setSelectedPart(queryPart);
@@ -281,6 +285,8 @@ export function InspectionEntry() {
   const statuses = parameters.map(p => getStatus(p));
   const allPassed = statuses.length > 0 && statuses.every(s => s === 'PASS');
   const anyFailed = statuses.some(s => s === 'FAIL');
+  const completedParamsCount = statuses.filter(s => s !== null).length;
+  const completionPercentage = parameters.length > 0 ? Math.round((completedParamsCount / parameters.length) * 100) : 0;
   const totalReadingsEntered = Object.values(form.values.readings).filter(v => v !== undefined && v !== null && String(v).trim() !== '').length;
   const isDuplicate = todayTransactions.some(
     (t) => t.shiftId === form.values.shiftId && t.intervalName === form.values.intervalName
@@ -299,6 +305,7 @@ export function InspectionEntry() {
             onChange={(val) => {
               setSelectedPart(val);
               setSelectedOp(null);
+              setActiveStep(0);
               setSearchParams(val ? { partId: val } : {});
             }}
             placeholder="Select Part Number"
@@ -310,6 +317,7 @@ export function InspectionEntry() {
             value={selectedOp}
             onChange={(val) => {
               setSelectedOp(val);
+              setActiveStep(0);
               if (selectedPart) {
                 setSearchParams({ partId: selectedPart, opId: val || '' });
               }
@@ -320,7 +328,17 @@ export function InspectionEntry() {
           />
           <Select
             label="Shift"
-            data={shifts.map(s => ({ value: s.id, label: s.name }))}
+            data={shifts.map(s => {
+              const shiftHas1Half = todayTransactions.some(t => t.shiftId === s.id && t.intervalName === '1 Half');
+              const shiftHas2Half = todayTransactions.some(t => t.shiftId === s.id && t.intervalName === '2 Half');
+              const isCompleted = shiftHas1Half && shiftHas2Half;
+              
+              return { 
+                value: s.id, 
+                label: isCompleted ? `${s.name} (Completed)` : s.name,
+                disabled: isCompleted
+              };
+            })}
             required
             disabled={!selectedPart || !selectedOp}
             {...form.getInputProps('shiftId')}
@@ -391,7 +409,9 @@ export function InspectionEntry() {
            <TableSkeleton rows={4} />
         </Paper>
       ) : parameters.length > 0 && (
-        <Paper withBorder p={0} radius="md" className="overflow-hidden">
+        <>
+          {/* Desktop Table View */}
+          <Paper withBorder p={0} radius="md" className="hidden md:block overflow-hidden mb-8">
           <div className="overflow-x-auto">
             <Table striped highlightOnHover verticalSpacing="md" style={{ minWidth: 800 }}>
               <Table.Thead className="bg-gray-50">
@@ -486,18 +506,165 @@ export function InspectionEntry() {
             />
           </div>
         </Paper>
+
+        {/* Mobile Wizard View */}
+        <div className="block md:hidden mb-8">
+          <div className="mb-4">
+            <Group justify="space-between" mb="xs">
+              <Select
+                size="xs"
+                variant="filled"
+                value={String(activeStep)}
+                onChange={(val) => val && setActiveStep(Number(val))}
+                data={parameters.map((_, idx) => ({ value: String(idx), label: `Parameter ${idx + 1} of ${parameters.length}` }))}
+                styles={{ input: { fontWeight: 600, width: 140 } }}
+                allowDeselect={false}
+              />
+              <Text size="sm" fw={500} c="blue">{completionPercentage}% completed</Text>
+            </Group>
+            <Progress value={completionPercentage} size="md" color="blue" radius="xl" />
+          </div>
+
+          <Card withBorder shadow="sm" radius="md" p="md">
+            {(() => {
+              const param = parameters[activeStep];
+              if (!param) return null;
+              const status = getStatus(param);
+              const count = getReadingCount(param.freqOfInspn, form.values.intervalName);
+              const isNumeric = param.controlLimitMin !== null || param.controlLimitMax !== null;
+              const lc = param.leastCount;
+              const decimalPlaces = lc && lc > 0 ? Math.round(-Math.log10(lc)) : undefined;
+              const stepVal = lc && lc > 0 ? String(lc) : '0.001';
+
+              const validateLcPrecision = (value: string, idx: number) => {
+                if (!lc || lc <= 0 || !decimalPlaces) return;
+                const parts = value.split('.');
+                if (parts.length === 2 && parts[1].length > decimalPlaces) {
+                  const truncated = parseFloat(value).toFixed(decimalPlaces);
+                  form.setFieldValue(`readings.${param.id}_${idx}`, truncated);
+                }
+              };
+
+              return (
+                <div>
+                  <Group justify="space-between" align="flex-start" mb="md">
+                    <div>
+                      <Text fw={700} size="xl">{param.parameterName}</Text>
+                      <Text size="sm" c="dimmed">Method: {param.methodOfChecking}</Text>
+                      <Text size="sm" c="dimmed">Freq: {param.freqOfInspn || 'N/A'}</Text>
+                    </div>
+                    {status === 'PASS' && <Badge color="green" size="lg" variant="filled">PASS</Badge>}
+                    {status === 'FAIL' && <Badge color="red" size="lg" variant="filled">FAIL</Badge>}
+                  </Group>
+
+                  <Paper withBorder bg="blue.0" p="md" radius="sm" mb="lg" className="border-blue-200">
+                    <Text size="sm" fw={700} c="blue.9">Specification:</Text>
+                    <Text size="lg" fw={600} c="blue.9">
+                      {param.specText || `${param.nominalValue} +${param.upperTolerance}/${param.lowerTolerance}`}
+                    </Text>
+                  </Paper>
+
+                  <div className="flex flex-col gap-4">
+                    {Array.from({ length: count }).map((_, idx) => (
+                      <div key={idx}>
+                        <Text size="sm" fw={600} mb={6}>Reading {idx + 1}</Text>
+                        {isNumeric ? (
+                          <TextInput
+                            placeholder={`Enter reading ${idx + 1}`}
+                            type="number"
+                            inputMode="decimal"
+                            step={stepVal}
+                            size="xl"
+                            {...form.getInputProps(`readings.${param.id}_${idx}`)}
+                            onBlur={(e) => validateLcPrecision(e.target.value, idx)}
+                          />
+                        ) : (
+                          <Autocomplete
+                            placeholder="Select OK/NG"
+                            data={['OK', 'NG']}
+                            size="xl"
+                            {...form.getInputProps(`readings.${param.id}_${idx}`)}
+                          />
+                        )}
+                        {lc && <Text size="xs" c="dimmed" mt={4}>Least Count: {lc}</Text>}
+                      </div>
+                    ))}
+                  </div>
+
+                  <Group justify="space-between" mt="xl" pt="md" className="border-t">
+                    <Button
+                      variant="light"
+                      leftSection={<ArrowLeft size={16} />}
+                      disabled={activeStep === 0}
+                      onClick={() => setActiveStep(prev => prev - 1)}
+                      size="md"
+                    >
+                      Back
+                    </Button>
+                    
+                    {activeStep < parameters.length - 1 ? (
+                      <Button
+                        rightSection={<ArrowRight size={16} />}
+                        onClick={() => setActiveStep(prev => prev + 1)}
+                        size="md"
+                      >
+                        Next
+                      </Button>
+                    ) : (
+                      <Button
+                        color={anyFailed ? 'red' : allPassed ? 'green' : 'blue'}
+                        onClick={() => handleSubmit(form.values)}
+                        loading={submitting}
+                        disabled={!form.values.lotNumber || totalReadingsEntered === 0 || isDuplicate}
+                        leftSection={<CheckCircle2 size={16} />}
+                        size="md"
+                      >
+                        Submit
+                      </Button>
+                    )}
+                  </Group>
+                  <Button
+                    variant="default"
+                    fullWidth
+                    mt="md"
+                    leftSection={<Save size={16} />}
+                    onClick={() => saveDraftMutation.mutate(form.values)}
+                    loading={saveDraftMutation.isPending}
+                    size="md"
+                  >
+                    Save as Draft
+                  </Button>
+                </div>
+              );
+            })()}
+          </Card>
+
+          {activeStep === parameters.length - 1 && (
+            <Card withBorder shadow="sm" radius="md" p="md" mt="md">
+              <Textarea
+                label="Final Remarks"
+                placeholder="Any issues or notes before submitting..."
+                {...form.getInputProps('remarks')}
+                minRows={3}
+                size="md"
+              />
+            </Card>
+          )}
+        </div>
+      </>
       )}
 
-      {/* Sticky Save Button Bar */}
-      <Affix position={{ bottom: 0, left: 0, right: 0 }} zIndex={100}>
-        <Transition transition="slide-up" mounted={parameters.length > 0}>
-          {(transitionStyles) => (
-            <div 
-              style={transitionStyles} 
-              className={`p-3 sm:p-4 shadow-lg border-t ${
-                anyFailed ? 'bg-red-50' : allPassed ? 'bg-green-50' : 'bg-white'
-              }`}
-            >
+      {/* Sticky Save Button Bar (Desktop Only) */}
+      {!isMobile && (
+        <Affix position={{ bottom: 0, left: 0, right: 0 }} zIndex={100}>
+          <Transition transition="slide-up" mounted={parameters.length > 0}>
+            {(transitionStyles) => (
+              <div 
+                style={transitionStyles} 
+                className={`p-3 sm:p-4 shadow-lg border-t ${
+                  anyFailed ? 'bg-red-50' : allPassed ? 'bg-green-50' : 'bg-white'
+                }`}
+              >
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 pl-[250px] max-md:pl-0 w-full max-w-7xl mx-auto">
                 {isDuplicate ? (
                   <Group c="orange" className="font-bold text-sm sm:text-base">
@@ -542,6 +709,7 @@ export function InspectionEntry() {
           )}
         </Transition>
       </Affix>
+      )}
     </div>
   );
 }
