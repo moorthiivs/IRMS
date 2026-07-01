@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import {
   Title, Paper, Group, Text, Button, Table, Badge, ActionIcon,
   Modal, TextInput, Select, Stack, Tooltip,
-  Avatar, Loader,
+  Avatar,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';

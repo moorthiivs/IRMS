@@ -10,7 +10,7 @@ import {
   Alert 
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { AlertCircle, Smartphone } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '../store/auth-store';
 import { Capacitor } from '@capacitor/core';
