@@ -36,17 +36,7 @@ try {
     throw new Error('❌ Source APK not found! Build might have failed.');
   }
 
-  // 5. Git operations
-  console.log('\n🐙 Pushing to GitHub...');
-  run('git add .');
-  try {
-    run('git commit -m "chore: auto-build and release APK [skip ci]"');
-  } catch (e) {
-    console.log('No changes to commit, proceeding to push...');
-  }
-  run('git push');
-
-  console.log('\n🎉 Release process completed successfully!');
+  console.log('\n🎉 Local release build completed successfully!');
 } catch (error) {
   console.error('\n❌ Release process failed!');
   process.exit(1);
