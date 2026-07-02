@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { 
   Title, Paper, Table, Group, Badge, ActionIcon, 
   Tabs, Select, TextInput, Button, Text, Tooltip,
-  Modal, Checkbox, SimpleGrid, Textarea, Timeline, ThemeIcon, Autocomplete
+  Modal, Checkbox, SimpleGrid, Textarea, Timeline, ThemeIcon, Autocomplete, LoadingOverlay
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -97,6 +97,12 @@ export function Reports() {
   // Feature 5: Audit Trail Drawer State
   const [auditTrailId, setAuditTrailId] = useState<string | null>(null);
   const [auditTrailData, setAuditTrailData] = useState<CorrectionEntry[]>([]);
+
+  // Bulk Operations State
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [bulkDeletePending, setBulkDeletePending] = useState(false);
+  const [bulkApprovePending, setBulkApprovePending] = useState(false);
 
   // 1. Transaction History Query
   const { data: recent = [], isLoading: isRecentLoading } = useQuery({
@@ -261,6 +267,58 @@ export function Reports() {
     });
   };
 
+  const handleBulkDelete = () => {
+    modals.openConfirmModal({
+      title: 'Bulk Delete Inspections',
+      centered: true,
+      children: <Text size="sm">Are you sure you want to delete {selectedIds.length} inspection(s)?</Text>,
+      labels: { confirm: 'Delete All', cancel: 'Cancel' },
+      confirmProps: { color: 'red' },
+      onConfirm: async () => {
+        setBulkDeletePending(true);
+        try {
+          await Promise.all(selectedIds.map(id => inspectionService.deleteInspection(id)));
+          notifications.show({ title: 'Deleted', message: `${selectedIds.length} report(s) deleted.`, color: 'green' });
+          setSelectedIds([]);
+          queryClient.invalidateQueries({ queryKey: ['recent-inspections'] });
+          queryClient.invalidateQueries({ queryKey: ['daily-report'] });
+        } catch (error) {
+          notifications.show({ title: 'Error', message: 'Failed to delete some reports.', color: 'red' });
+        } finally {
+          setBulkDeletePending(false);
+        }
+      }
+    });
+  };
+
+  const handleBulkApprove = (groupTxs: any[]) => {
+    const unapproved = groupTxs.filter(tx => tx.status === 'PASSED' && !tx.approvedById);
+    if (unapproved.length === 0) return;
+
+    modals.openConfirmModal({
+      title: 'Bulk Approve Shift',
+      centered: true,
+      children: <Text size="sm">Are you sure you want to approve {unapproved.length} pending inspection(s) for this shift?</Text>,
+      labels: { confirm: 'Approve All', cancel: 'Cancel' },
+      confirmProps: { color: 'green' },
+      onConfirm: async () => {
+        setBulkApprovePending(true);
+        try {
+          await Promise.all(unapproved.map(tx => inspectionService.approveInspection(tx.id)));
+          notifications.show({ title: 'Approved', message: `${unapproved.length} report(s) approved.`, color: 'green' });
+          queryClient.invalidateQueries({ queryKey: ['recent-inspections'] });
+          queryClient.invalidateQueries({ queryKey: ['daily-report'] });
+        } catch (error) {
+          notifications.show({ title: 'Error', message: 'Failed to approve some reports.', color: 'red' });
+        } finally {
+          setBulkApprovePending(false);
+        }
+      }
+    });
+  };
+
+  const isGlobalPending = deleteMutation.isPending || approveMutation.isPending || correctionMutation.isPending || bulkDeletePending || bulkApprovePending;
+
   // Feature 5: Open Audit Trail
   const handleViewAuditTrail = async (txId: string) => {
     try {
@@ -325,7 +383,7 @@ export function Reports() {
         return (
           <div className="relative h-12 w-full">
             <svg className="absolute inset-0 h-full w-full pointer-events-none" preserveAspectRatio="none" viewBox="0 0 100 100">
-              <line x1="0" y1="100" x2="100" y2="0" stroke="#dee2e6" strokeWidth="1" />
+              <line x1="0" y1="100" x2="100" y2="0" stroke="#000" strokeWidth="1" />
             </svg>
           </div>
         );
@@ -339,7 +397,7 @@ export function Reports() {
         return (
           <div className="relative h-12 w-full">
             <svg className="absolute inset-0 h-full w-full pointer-events-none" preserveAspectRatio="none" viewBox="0 0 100 100">
-              <line x1="0" y1="100" x2="100" y2="0" stroke="#dee2e6" strokeWidth="1" />
+              <line x1="0" y1="100" x2="100" y2="0" stroke="#000" strokeWidth="1" />
             </svg>
           </div>
         );
@@ -365,15 +423,105 @@ export function Reports() {
 
     const singleReading = readings[0];
     return (
-      <div className={`text-center text-xs font-semibold ${singleReading.status === 'FAIL' ? 'text-red-600' : 'text-gray-800'}`}>
+      <div className={`flex items-center justify-center h-12 w-full text-center text-xs font-semibold ${singleReading.status === 'FAIL' ? 'text-red-600' : 'text-gray-800'}`}>
         {singleReading.observedValue}
       </div>
     );
   };
 
+  const isOncePerDay = (param: any) => {
+    return param.frequencyUnit === 'Day-wise' || param.frequencyUnit === 'day';
+  };
+
   const isOncePerShift = (param: any) => {
+    if (isOncePerDay(param)) return false;
     const freq = String(param.freqOfInspn || '').toLowerCase().trim();
     return freq === '1' || freq === 'once per shift' || freq === '1no/shift' || freq === '1/shift' || freq === '1/day';
+  };
+
+  const getMergedCellContentDay = (param: any) => {
+    const allTransactions = [...dailyReportTransactions]
+      .sort((a, b) => new Date(a.inspectionTimestamp).getTime() - new Date(b.inspectionTimestamp).getTime());
+    
+    const freqNum = parseInt(param.freqOfInspn || '1', 10);
+
+    // Diagonal line for Freq: 2 Day-wise
+    if (freqNum === 2) {
+      const readings: any[] = [];
+      allTransactions.forEach(tx => {
+        if (tx.details) {
+          tx.details.forEach((d: any) => {
+            if (d.parameterId === param.id) readings.push(d);
+          });
+        }
+      });
+      return (
+        <Table.Td p={0} colSpan={6}>
+          <div className="relative h-12 w-full flex items-center justify-center">
+            <svg className="absolute inset-0 h-full w-full pointer-events-none" preserveAspectRatio="none" viewBox="0 0 100 100">
+              <line x1="0" y1="100" x2="100" y2="0" stroke="#000000" strokeWidth="1" />
+            </svg>
+            <span className={`absolute top-2 left-[30%] text-xs leading-none ${readings[0]?.status === 'FAIL' ? 'text-red-600 font-bold' : 'text-gray-800 font-semibold'}`}>
+              {readings[0]?.observedValue || ''}
+            </span>
+            <span className={`absolute bottom-2 right-[30%] text-xs leading-none ${readings[1]?.status === 'FAIL' ? 'text-red-600 font-bold' : 'text-gray-800 font-semibold'}`}>
+              {readings[1]?.observedValue || ''}
+            </span>
+          </div>
+        </Table.Td>
+      );
+    }
+
+    // Centered 3 columns matching Shift A, B, C for Freq: 3 Day-wise
+    if (freqNum === 3) {
+      const shiftReadings = [null, null, null] as any[];
+      allTransactions.forEach(tx => {
+        if (tx.details) {
+          tx.details.forEach((d: any) => {
+            if (d.parameterId === param.id) {
+              const shiftIdx = shifts.findIndex((s: any) => s.id === tx.shiftId);
+              if (shiftIdx >= 0 && shiftIdx < 3 && !shiftReadings[shiftIdx]) {
+                shiftReadings[shiftIdx] = d;
+              }
+            }
+          });
+        }
+      });
+
+      return (
+        <>
+          {shiftReadings.map((reading, idx) => (
+            <Table.Td key={idx} p={0} colSpan={2} className="text-center h-12 align-middle">
+              {reading && (
+                <span className={`text-xs ${reading.status === 'FAIL' ? 'text-red-600 font-bold' : 'text-gray-800 font-semibold'}`}>
+                  {reading.observedValue || ''}
+                </span>
+              )}
+            </Table.Td>
+          ))}
+        </>
+      );
+    }
+
+    // Default centered single block for everything else (Freq: 1)
+    const readings: any[] = [];
+    allTransactions.forEach(tx => {
+      if (tx.details) {
+        tx.details.forEach((d: any) => {
+          if (d.parameterId === param.id) readings.push(d);
+        });
+      }
+    });
+
+    return (
+      <Table.Td p={0} colSpan={6} className="text-center h-12 align-middle">
+        {readings[readings.length - 1] && (
+          <span className={`text-xs ${readings[readings.length - 1].status === 'FAIL' ? 'text-red-600 font-bold' : 'text-gray-800 font-semibold'}`}>
+            {readings[readings.length - 1].observedValue || ''}
+          </span>
+        )}
+      </Table.Td>
+    );
   };
 
   const getMergedCellContent = (shiftName: string, param: any) => {
@@ -400,7 +548,7 @@ export function Reports() {
     // Show only the latest item
     const r = readings[readings.length - 1];
     return (
-      <div className={`text-center text-xs font-semibold ${r.status === 'FAIL' ? 'text-red-600' : 'text-gray-800'}`}>
+      <div className={`flex items-center justify-center h-12 w-full text-center text-xs font-semibold ${r.status === 'FAIL' ? 'text-red-600' : 'text-gray-800'}`}>
         {r.observedValue}
       </div>
     );
@@ -439,8 +587,34 @@ export function Reports() {
   // Find Part details
   const currentPartInfo = parts.find(p => p.id === selectedPart);
 
+  // Feature 2: Group Recent Inspections
+  const groupedRecent = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    recent.forEach((tx: any) => {
+      const dateStr = new Date(tx.inspectionTimestamp).toLocaleDateString();
+      const shiftName = tx.shift?.name || 'Unknown Shift';
+      const key = `${dateStr} - ${shiftName}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(tx);
+    });
+    return groups;
+  }, [recent]);
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleSelectAll = (checked: boolean, txIds: string[]) => {
+    if (checked) {
+      setSelectedIds(prev => [...new Set([...prev, ...txIds])]);
+    } else {
+      setSelectedIds(prev => prev.filter(id => !txIds.includes(id)));
+    }
+  };
+
   return (
-    <div>
+    <div style={{ position: 'relative', minHeight: '100vh' }}>
+      <LoadingOverlay visible={isGlobalPending} zIndex={1000} overlayProps={{ radius: "sm", blur: 2 }} />
       <style>{`
         @media print {
           @page {
@@ -554,17 +728,24 @@ export function Reports() {
                   </Badge>
                 )}
               </Group>
-              <Button
-                size="xs"
-                variant="subtle"
-                onClick={() => {
-                  setSearchParams({});
-                  setHistoryDate(null);
-                  setHistoryShift(null);
-                }}
-              >
-                Clear Filters
-              </Button>
+              <Group gap="xs">
+                {selectedIds.length > 0 && (
+                  <Button size="xs" color="red" variant="filled" onClick={handleBulkDelete} loading={bulkDeletePending}>
+                    Bulk Delete Selected ({selectedIds.length})
+                  </Button>
+                )}
+                <Button
+                  size="xs"
+                  variant="subtle"
+                  onClick={() => {
+                    setSearchParams({});
+                    setHistoryDate(null);
+                    setHistoryShift(null);
+                  }}
+                >
+                  Clear Filters
+                </Button>
+              </Group>
             </Group>
           </Paper>
           <Paper withBorder p="md" radius="md">
@@ -575,6 +756,13 @@ export function Reports() {
                 <Table striped highlightOnHover style={{ minWidth: 900 }}>
                 <Table.Thead>
                   <Table.Tr>
+                    <Table.Th style={{ width: 40 }}>
+                      <Checkbox
+                        checked={recent.length > 0 && selectedIds.length === recent.length}
+                        indeterminate={selectedIds.length > 0 && selectedIds.length < recent.length}
+                        onChange={(e) => handleSelectAll(e.currentTarget.checked, recent.map((t: any) => t.id))}
+                      />
+                    </Table.Th>
                     <Table.Th>Date & Time</Table.Th>
                     <Table.Th>Part / Operation</Table.Th>
                     <Table.Th>Shift</Table.Th>
@@ -585,76 +773,118 @@ export function Reports() {
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {recent.map((item) => (
-                    <Table.Tr key={item.id}>
-                      <Table.Td>{new Date(item.inspectionTimestamp).toLocaleString()}</Table.Td>
-                      <Table.Td>{item.part?.partNumber} / {item.operation?.operationNumber}</Table.Td>
-                      <Table.Td>{item.shift?.name}</Table.Td>
-                      <Table.Td>{item.lotNumber}</Table.Td>
-                      <Table.Td>{item.inspector?.name}</Table.Td>
-                      <Table.Td>
-                        <Badge color={item.status === 'PASSED' ? 'green' : 'red'}>
-                          {item.status}
-                        </Badge>
-                      </Table.Td>
-                      <Table.Td>
-                        <Group gap="xs" wrap="nowrap">
-                          <ActionIcon variant="light" color="blue" onClick={() => navigate(`/reports/${item.id}`)}>
-                            <Eye size={16} />
-                          </ActionIcon>
-                          <ActionIcon variant="light" color="gray" onClick={() => navigate(`/reports/${item.id}`)}>
-                            <Printer size={16} />
-                          </ActionIcon>
-                          {/* Feature 5: Take Action for rejected reports */}
-                          {item.status === 'REJECTED' && (
-                            <Tooltip label="Take Action — Correct failed values">
-                              <ActionIcon
-                                variant="light"
-                                color="orange"
-                                onClick={() => handleTakeAction(item.id)}
+                  {Object.entries(groupedRecent).map(([groupKey, groupTxs]) => (
+                    <React.Fragment key={groupKey}>
+                      <Table.Tr 
+                        className={`font-bold cursor-pointer transition-colors ${groupTxs.some((tx: any) => tx.status === 'REJECTED') ? 'bg-orange-100/70 hover:bg-orange-200/80 text-orange-900' : 'bg-gray-100/80 hover:bg-gray-200'}`}
+                        onClick={() => toggleGroup(groupKey)}
+                      >
+                        <Table.Td colSpan={8}>
+                          <Group justify="space-between">
+                            <Text size="sm" fw={700} className="text-gray-800">
+                              {expandedGroups[groupKey] ? '▼' : '▶'} {groupKey} ({groupTxs.length} submissions)
+                            </Text>
+                            {groupTxs.some((tx: any) => tx.status === 'REJECTED') ? (
+                              <Badge color="orange" variant="filled" size="sm">
+                                Take Action Required
+                              </Badge>
+                            ) : isAdmin && groupTxs.some((tx: any) => tx.status === 'PASSED' && !tx.approvedById) ? (
+                              <Button
+                                size="compact-xs"
+                                color="green"
+                                onClick={(e) => { e.stopPropagation(); handleBulkApprove(groupTxs); }}
                               >
-                                <Wrench size={16} />
-                              </ActionIcon>
-                            </Tooltip>
-                          )}
-                          {/* Feature 5: Audit Trail */}
-                          <Tooltip label="View Audit Trail">
-                            <ActionIcon
-                              variant="light"
-                              color="cyan"
-                              onClick={() => handleViewAuditTrail(item.id)}
-                            >
-                              <History size={16} />
-                            </ActionIcon>
-                          </Tooltip>
-                          {item.status === 'PASSED' && !item.approvedById && isAdmin && (
-                            <ActionIcon
-                              variant="light"
-                              color="violet"
-                              onClick={() => {
-                                setApprovalId(item.id);
-                                setReviewedChecked(false);
+                                Bulk Approve Shift
+                              </Button>
+                            ) : null}
+                          </Group>
+                        </Table.Td>
+                      </Table.Tr>
+                      {expandedGroups[groupKey] && groupTxs.map((item: any) => (
+                        <Table.Tr 
+                          key={item.id} 
+                          className={selectedIds.includes(item.id) ? 'bg-red-50/40' : item.status === 'REJECTED' ? 'bg-orange-50/50' : ''}
+                        >
+                          <Table.Td>
+                            <Checkbox
+                              checked={selectedIds.includes(item.id)}
+                              onChange={(e) => {
+                                if (e.currentTarget.checked) {
+                                  setSelectedIds(prev => [...prev, item.id]);
+                                } else {
+                                  setSelectedIds(prev => prev.filter(id => id !== item.id));
+                                }
                               }}
-                              loading={approveMutation.isPending && approvalId === item.id}
-                            >
-                              <FileCheck size={16} />
-                            </ActionIcon>
-                          )}
-                          {isAdmin && (
-                            <Tooltip label="Delete Report">
-                              <ActionIcon
-                                variant="light"
-                                color="red"
-                                onClick={() => handleDelete(item.id)}
-                                loading={deleteMutation.isPending}
-                              >
-                                <Trash2 size={16} />
+                            />
+                          </Table.Td>
+                          <Table.Td>{new Date(item.inspectionTimestamp).toLocaleString()}</Table.Td>
+                          <Table.Td>{item.part?.partNumber} / {item.operation?.operationNumber}</Table.Td>
+                          <Table.Td>{item.shift?.name}</Table.Td>
+                          <Table.Td>{item.lotNumber}</Table.Td>
+                          <Table.Td>{item.inspector?.name}</Table.Td>
+                          <Table.Td>
+                            <Badge color={item.status === 'PASSED' ? 'green' : 'red'}>
+                              {item.status}
+                            </Badge>
+                          </Table.Td>
+                          <Table.Td>
+                            <Group gap="xs" wrap="nowrap">
+                              <ActionIcon variant="light" color="blue" onClick={() => navigate(`/reports/${item.id}`)}>
+                                <Eye size={16} />
                               </ActionIcon>
-                            </Tooltip>
-                          )}
-                        </Group>
-                      </Table.Td>
-                    </Table.Tr>
+                              <ActionIcon variant="light" color="gray" onClick={() => navigate(`/reports/${item.id}`)}>
+                                <Printer size={16} />
+                              </ActionIcon>
+                              {item.status === 'REJECTED' && (
+                                <Tooltip label="Take Action — Correct failed values">
+                                  <ActionIcon
+                                    variant="light"
+                                    color="orange"
+                                    onClick={() => handleTakeAction(item.id)}
+                                  >
+                                    <Wrench size={16} />
+                                  </ActionIcon>
+                                </Tooltip>
+                              )}
+                              <Tooltip label="View Audit Trail">
+                                <ActionIcon
+                                  variant="light"
+                                  color="cyan"
+                                  onClick={() => handleViewAuditTrail(item.id)}
+                                >
+                                  <History size={16} />
+                                </ActionIcon>
+                              </Tooltip>
+                              {item.status === 'PASSED' && !item.approvedById && isAdmin && (
+                                <ActionIcon
+                                  variant="light"
+                                  color="violet"
+                                  onClick={() => {
+                                    setApprovalId(item.id);
+                                    setReviewedChecked(false);
+                                  }}
+                                  loading={approveMutation.isPending && approvalId === item.id}
+                                >
+                                  <FileCheck size={16} />
+                                </ActionIcon>
+                              )}
+                              {isAdmin && (
+                                <Tooltip label="Delete Report">
+                                  <ActionIcon
+                                    variant="light"
+                                    color="red"
+                                    onClick={() => handleDelete(item.id)}
+                                    loading={deleteMutation.isPending}
+                                  >
+                                    <Trash2 size={16} />
+                                  </ActionIcon>
+                                </Tooltip>
+                              )}
+                            </Group>
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </React.Fragment>
                   ))}
                 </Table.Tbody>
                 </Table>
@@ -956,7 +1186,7 @@ export function Reports() {
               </div>
 
               {/* Main Table Grid */}
-              <Table withTableBorder withColumnBorders verticalSpacing="xs" horizontalSpacing="xs" style={{ borderCollapse: 'collapse' }}>
+              <Table withTableBorder withColumnBorders borderColor="#000" verticalSpacing="xs" horizontalSpacing="xs" style={{ borderCollapse: 'collapse' }}>
                 <Table.Thead className="bg-gray-50 text-center font-bold text-xs">
                   <Table.Tr>
                     <Table.Th rowSpan={2} style={{ width: 45 }} className="text-center">S. No.</Table.Th>
@@ -997,7 +1227,9 @@ export function Reports() {
                         <Table.Td className="text-center font-medium">{param.freqOfInspn || '-'}</Table.Td>
                         
                         {/* Observation cells aligned per Shift and Interval */}
-                        {isOncePerShift(param) ? (
+                        {isOncePerDay(param) ? (
+                          <>{getMergedCellContentDay(param)}</>
+                        ) : isOncePerShift(param) ? (
                           <>
                             <Table.Td p={0} colSpan={2}>{getMergedCellContent('Shift A', param)}</Table.Td>
                             <Table.Td p={0} colSpan={2}>{getMergedCellContent('Shift B', param)}</Table.Td>

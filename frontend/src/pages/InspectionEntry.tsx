@@ -141,21 +141,52 @@ export function InspectionEntry() {
 
   // Feature 3: Day-wise frequency check helper
   const isDayWiseAlreadyRecorded = (param: typeof parameters[0]): boolean => {
-    if (param.frequencyUnit !== 'day') return false;
+    if (param.frequencyUnit !== 'day' && param.frequencyUnit !== 'Day-wise') return false;
+    
+    const parsedFreq = parseInt(String(param.freqOfInspn || '1').replace(/\D/g, ''), 10);
+    const targetFreq = (!isNaN(parsedFreq) && parsedFreq >= 1 && parsedFreq <= 3) ? parsedFreq : 1;
+
+    let totalCount = 0;
+    let currentShiftCount = 0;
+
+    todayTransactions.forEach(tx => {
+      tx.details?.forEach(d => {
+        if (d.parameterId === param.id) {
+          totalCount++;
+          if (tx.shiftId === form.values.shiftId) {
+            currentShiftCount++;
+          }
+        }
+      });
+    });
+
+    if (totalCount >= targetFreq) return true;
+    if (currentShiftCount >= 1) return true;
+
+    return false;
+  };
+
+  const isShiftWiseAlreadyRecorded = (param: typeof parameters[0]): boolean => {
+    if (param.frequencyUnit === 'day' || param.frequencyUnit === 'Day-wise') return false;
     const freq = String(param.freqOfInspn || '').toLowerCase().trim();
-    const isFreq1 = freq === '1' || freq === '1no/shift' || freq === '1/shift' || freq === '1/day' || freq === 'once per shift';
-    if (!isFreq1) return false;
-    // Check if any shift today already has a reading for this param
+    if (freq !== '1') return false;
+    
+    // Check if THIS shift already has a reading for this param
     return todayTransactions.some(tx =>
+      tx.shiftId === form.values.shiftId &&
       tx.details?.some(d => d.parameterId === param.id)
     );
   };
 
-  const getReadingCount = (freq: string | null | undefined, interval: string): number => {
+  const getReadingCount = (freq: string | null | undefined, interval: string, frequencyUnit?: string): number => {
     if (!freq) return 1;
     const lowerFreq = freq.toLowerCase().trim();
     
     if (interval === 'First Piece' || interval === 'Last Piece') {
+      return 1;
+    }
+
+    if (frequencyUnit === 'day' || frequencyUnit === 'Day-wise') {
       return 1;
     }
     
@@ -205,8 +236,9 @@ export function InspectionEntry() {
   const getStatus = (param: typeof parameters[0]): 'PASS' | 'FAIL' | null => {
     // If day-wise and already recorded, treat as PASS
     if (isDayWiseAlreadyRecorded(param)) return 'PASS';
+    if (isShiftWiseAlreadyRecorded(param)) return 'PASS';
 
-    const count = getReadingCount(param.freqOfInspn, form.values.intervalName);
+    const count = getReadingCount(param.freqOfInspn, form.values.intervalName, param.frequencyUnit);
     
     let hasReadings = false;
     let anyFailed = false;
@@ -281,7 +313,7 @@ export function InspectionEntry() {
         // Feature 3: Skip day-wise already-recorded params
         if (isDayWiseAlreadyRecorded(param)) continue;
 
-        const count = getReadingCount(param.freqOfInspn, values.intervalName);
+        const count = getReadingCount(param.freqOfInspn, values.intervalName, param.frequencyUnit);
         for (let idx = 0; idx < count; idx++) {
           const val = values.readings[`${param.id}_${idx}`];
           if (val === undefined || val === null || val.trim() === '') {
@@ -560,7 +592,7 @@ export function InspectionEntry() {
               <Table.Tbody>
                 {filteredParameters.map((param) => {
                   const status = getStatus(param);
-                  const count = getReadingCount(param.freqOfInspn, form.values.intervalName);
+                  const count = getReadingCount(param.freqOfInspn, form.values.intervalName, param.frequencyUnit);
                   const dayWiseRecorded = isDayWiseAlreadyRecorded(param);
                   return (
                     <Table.Tr key={param.id} className={dayWiseRecorded ? 'opacity-60' : ''}>
@@ -682,7 +714,7 @@ export function InspectionEntry() {
                   <Table.Tbody>
                     {filteredParameters.map((param, idx) => {
                       const status = getStatus(param);
-                      const count = getReadingCount(param.freqOfInspn, form.values.intervalName);
+                      const count = getReadingCount(param.freqOfInspn, form.values.intervalName, param.frequencyUnit);
                       const isNumeric = param.controlLimitMin !== null || param.controlLimitMax !== null;
                       const dayWiseRecorded = isDayWiseAlreadyRecorded(param);
                       const lc = param.leastCount;
@@ -814,12 +846,13 @@ export function InspectionEntry() {
                   const param = filteredParameters[activeStep];
                   if (!param) return null;
                   const status = getStatus(param);
-                  const count = getReadingCount(param.freqOfInspn, form.values.intervalName);
+                  const count = getReadingCount(param.freqOfInspn, form.values.intervalName, param.frequencyUnit);
                   const isNumeric = param.controlLimitMin !== null || param.controlLimitMax !== null;
                   const lc = param.leastCount;
                   const decimalPlaces = lc && lc > 0 ? Math.round(-Math.log10(lc)) : undefined;
                   const stepVal = lc && lc > 0 ? String(lc) : '0.001';
                   const dayWiseRecorded = isDayWiseAlreadyRecorded(param);
+                  const shiftWiseRecorded = isShiftWiseAlreadyRecorded(param);
 
                   const validateLcPrecision = (value: string, idx: number) => {
                     if (!lc || lc <= 0 || !decimalPlaces) return;
@@ -852,6 +885,10 @@ export function InspectionEntry() {
                       {dayWiseRecorded ? (
                         <Alert color="teal" variant="light" icon={<Info size={16} />}>
                           This parameter has already been recorded in an earlier shift today (Day-wise frequency).
+                        </Alert>
+                      ) : shiftWiseRecorded ? (
+                        <Alert color="teal" variant="light" icon={<Info size={16} />}>
+                          This parameter has already been recorded in an earlier interval this shift.
                         </Alert>
                       ) : (
                         <div className="flex flex-col gap-4">

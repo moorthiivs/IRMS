@@ -512,10 +512,13 @@ function ParameterEditor({
                   />
                 </Table.Td>
                 <Table.Td>
-                  <TextInput
+                  <Select
                     value={param.freqOfInspn || ''}
-                    onChange={(e) => updateField(idx, 'freqOfInspn', e.target.value)}
+                    onChange={(v) => updateField(idx, 'freqOfInspn', v || '')}
+                    data={param.frequencyUnit === 'day' ? ['1', '2', '3'] : ['1', '2', '4']}
                     size="xs"
+                    allowDeselect={false}
+                    placeholder="Select"
                   />
                 </Table.Td>
                 <Table.Td>
