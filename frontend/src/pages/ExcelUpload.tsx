@@ -89,25 +89,13 @@ export function ExcelUpload() {
     setPreviewData(null);
   };
 
-  const handleDownloadTemplate = async () => {
-    try {
-      const response = await masterDataService.downloadTemplate();
-      const url = window.URL.createObjectURL(new Blob([response]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'upload_template.xlsx');
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      notifications.show({
-        title: 'Error',
-        message: 'Failed to download template',
-        color: 'red',
-        icon: <AlertCircle size={16} />
-      });
-    }
+  const handleDownloadTemplate = () => {
+    const link = document.createElement('a');
+    link.href = '/upload template.xlsx';
+    link.setAttribute('download', 'upload template.xlsx');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
 
   return (

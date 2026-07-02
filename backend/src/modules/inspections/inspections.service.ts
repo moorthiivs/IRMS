@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ValidationStatus, TransactionStatus } from '@prisma/client';
 import { CreateInspectionDto } from './dto/create-inspection.dto';
+import { CorrectInspectionDto } from './dto/correct-inspection.dto';
 
 @Injectable()
 export class InspectionsService {
@@ -95,6 +96,12 @@ export class InspectionsService {
 
   async createInspection(userId: string, dto: CreateInspectionDto) {
     const { partId, operationId, shiftId, lotNumber, mcNo, intervalName, remarks, details } = dto;
+
+    // 0. Check if lot number is required
+    const lotNumberRequired = await this.prisma.systemSettings.findUnique({ where: { key: 'lot_number_required' } });
+    if ((!lotNumberRequired || lotNumberRequired.value === 'true') && (!lotNumber || lotNumber.trim() === '')) {
+      throw new BadRequestException('Lot Number is required. You can make it optional in Settings.');
+    }
 
     // 1. Prevent Duplicate Entry
     const { due, message } = await this.checkInspectionDue(partId, operationId, intervalName, shiftId);
@@ -203,7 +210,7 @@ export class InspectionsService {
     return transaction;
   }
 
-  async getRecentInspections(status?: string, approval?: string) {
+  async getRecentInspections(status?: string, approval?: string, dateStr?: string, shiftId?: string) {
     const where: any = {};
 
     if (status === 'PASSED' || status === 'REJECTED') {
@@ -214,7 +221,20 @@ export class InspectionsService {
       where.approvedById = null;
     }
 
-    return this.prisma.inspectionTransaction.findMany({
+    if (dateStr) {
+      const targetDate = new Date(dateStr);
+      const start = new Date(targetDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(targetDate);
+      end.setHours(23, 59, 59, 999);
+      where.inspectionTimestamp = { gte: start, lte: end };
+    }
+
+    if (shiftId) {
+      where.shiftId = shiftId;
+    }
+
+    const query: any = {
       where,
       include: {
         part: true,
@@ -225,8 +245,13 @@ export class InspectionsService {
         },
       },
       orderBy: { inspectionTimestamp: 'desc' },
-      take: 50,
-    });
+    };
+
+    if (!dateStr) {
+      query.take = 100;
+    }
+
+    return this.prisma.inspectionTransaction.findMany(query);
   }
 
   async getInspectionById(id: string) {
@@ -237,6 +262,17 @@ export class InspectionsService {
           include: {
             parameter: true,
           },
+        },
+        corrections: {
+          include: {
+            correctedBy: {
+              select: { name: true, username: true },
+            },
+            detail: {
+              include: { parameter: true },
+            },
+          },
+          orderBy: { correctedAt: 'asc' },
         },
         part: true,
         operation: true,
@@ -481,5 +517,151 @@ export class InspectionsService {
         operation: true,
       },
     });
+  }
+
+  async correctInspection(transactionId: string, userId: string, dto: CorrectInspectionDto) {
+    const tx = await this.prisma.inspectionTransaction.findUnique({
+      where: { id: transactionId },
+      include: { details: { include: { parameter: true } } },
+    });
+
+    if (!tx) {
+      throw new BadRequestException('Inspection transaction not found.');
+    }
+
+    if (tx.status !== TransactionStatus.REJECTED) {
+      throw new BadRequestException('Only REJECTED inspections can be corrected.');
+    }
+
+    // Process each correction
+    for (const correction of dto.corrections) {
+      const detail = tx.details.find(d => d.id === correction.detailId);
+      if (!detail) {
+        throw new BadRequestException(`Inspection detail not found: ${correction.detailId}`);
+      }
+
+      if (detail.status !== ValidationStatus.FAIL) {
+        throw new BadRequestException(`Only failed parameters can be corrected. Parameter "${detail.parameter?.parameterName}" is not failed.`);
+      }
+
+      const previousValue = detail.observedValue;
+      const previousStatus = detail.status;
+
+      // Revalidate the corrected value
+      let newStatus: ValidationStatus = ValidationStatus.PASS;
+      const obsStr = String(correction.correctedValue).trim().toLowerCase();
+      const param = detail.parameter;
+
+      if (param && (param.controlLimitMin !== null || param.controlLimitMax !== null)) {
+        const val = parseFloat(correction.correctedValue);
+        if (isNaN(val)) {
+          newStatus = ValidationStatus.FAIL;
+        } else {
+          const EPSILON = 1e-6;
+          if (param.controlLimitMin !== null && val < param.controlLimitMin - EPSILON) {
+            newStatus = ValidationStatus.FAIL;
+          }
+          if (param.controlLimitMax !== null && val > param.controlLimitMax + EPSILON) {
+            newStatus = ValidationStatus.FAIL;
+          }
+        }
+      } else {
+        if (obsStr === 'ng' || obsStr === 'fail' || obsStr === '') {
+          newStatus = ValidationStatus.FAIL;
+        }
+      }
+
+      // Create correction audit entry
+      await this.prisma.correctionEntry.create({
+        data: {
+          transactionId,
+          detailId: correction.detailId,
+          previousValue,
+          correctedValue: String(correction.correctedValue),
+          previousStatus,
+          correctedStatus: newStatus,
+          correctedById: userId,
+          remarks: dto.remarks || null,
+        },
+      });
+
+      // Update the detail with corrected value and new status
+      await this.prisma.inspectionDetail.update({
+        where: { id: correction.detailId },
+        data: {
+          observedValue: String(correction.correctedValue),
+          status: newStatus,
+        },
+      });
+    }
+
+    // Re-evaluate overall transaction status
+    const updatedDetails = await this.prisma.inspectionDetail.findMany({
+      where: { transactionId },
+    });
+
+    const anyStillFailed = updatedDetails.some(d => d.status === ValidationStatus.FAIL);
+    const newOverallStatus = anyStillFailed ? TransactionStatus.REJECTED : TransactionStatus.PASSED;
+
+    const updatedTx = await this.prisma.inspectionTransaction.update({
+      where: { id: transactionId },
+      data: { status: newOverallStatus },
+      include: {
+        details: { include: { parameter: true } },
+        corrections: {
+          include: {
+            correctedBy: { select: { name: true, username: true } },
+            detail: { include: { parameter: true } },
+          },
+          orderBy: { correctedAt: 'asc' },
+        },
+        part: true,
+        operation: true,
+        shift: true,
+        inspector: { select: { name: true, signature: true } },
+      },
+    });
+
+    return updatedTx;
+  }
+
+  async getAuditTrail(transactionId: string) {
+    const tx = await this.prisma.inspectionTransaction.findUnique({
+      where: { id: transactionId },
+    });
+
+    if (!tx) {
+      throw new BadRequestException('Inspection transaction not found.');
+    }
+
+    return this.prisma.correctionEntry.findMany({
+      where: { transactionId },
+      include: {
+        correctedBy: {
+          select: { name: true, username: true },
+        },
+        detail: {
+          include: { parameter: true },
+        },
+      },
+      orderBy: { correctedAt: 'asc' },
+    });
+  }
+
+  async deleteInspection(id: string) {
+    const tx = await this.prisma.inspectionTransaction.findUnique({
+      where: { id },
+    });
+
+    if (!tx) {
+      throw new BadRequestException('Inspection not found');
+    }
+
+    // Relying on Prisma's onDelete: Cascade for details and corrections
+    await this.prisma.inspectionTransaction.delete({
+      where: { id },
+    });
+
+    return { message: 'Inspection report deleted successfully' };
   }
 }

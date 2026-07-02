@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   Title, Paper, Table, Group, TextInput, Text, Badge,
   ActionIcon, Tooltip, Collapse, Modal, Button,
-  NumberInput, Tabs,
+  NumberInput, Tabs, Select
 } from '@mantine/core';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -369,6 +369,7 @@ function ParameterEditor({
       controlLimitMax: null,
       methodOfChecking: '',
       freqOfInspn: '',
+      frequencyUnit: 'shift',
       leastCount: null,
       class: null,
       sequence: editedParams.length + 1,
@@ -437,6 +438,7 @@ function ParameterEditor({
               <Table.Th style={{ minWidth: 120 }}>Limit MAX</Table.Th>
               <Table.Th style={{ minWidth: 160 }}>Method of Checking</Table.Th>
               <Table.Th style={{ minWidth: 120 }}>Freq. of Inspn.</Table.Th>
+              <Table.Th style={{ minWidth: 120 }}>Freq. Unit</Table.Th>
               <Table.Th style={{ minWidth: 90 }}>LC</Table.Th>
               <Table.Th style={{ minWidth: 60 }}>Actions</Table.Th>
             </Table.Tr>
@@ -514,6 +516,18 @@ function ParameterEditor({
                     value={param.freqOfInspn || ''}
                     onChange={(e) => updateField(idx, 'freqOfInspn', e.target.value)}
                     size="xs"
+                  />
+                </Table.Td>
+                <Table.Td>
+                  <Select
+                    value={param.frequencyUnit || 'shift'}
+                    onChange={(v) => updateField(idx, 'frequencyUnit', v || 'shift')}
+                    data={[
+                      { value: 'shift', label: 'Shift-wise' },
+                      { value: 'day', label: 'Day-wise' }
+                    ]}
+                    size="xs"
+                    allowDeselect={false}
                   />
                 </Table.Td>
                 <Table.Td>

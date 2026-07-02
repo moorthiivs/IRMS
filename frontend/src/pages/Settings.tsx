@@ -3,7 +3,7 @@ import {
   Title, Paper, Group, Text, Switch, Stack, Badge,
   Divider, Card, Alert, Loader,
 } from '@mantine/core';
-import { Settings as SettingsIcon, ShieldAlert, Trash2, Info } from 'lucide-react';
+import { Settings as SettingsIcon, ShieldAlert, Trash2, Info, Hash } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { settingsService } from '../services/settings.service';
 import { notifications } from '@mantine/notifications';
@@ -17,9 +17,11 @@ export function Settings() {
   });
 
   const [cascadeDelete, setCascadeDelete] = useState(false);
+  const [lotNumberRequired, setLotNumberRequired] = useState(true);
 
   useEffect(() => {
     setCascadeDelete(settings.deletion_policy === 'cascade');
+    setLotNumberRequired(settings.lot_number_required !== 'false');
   }, [settings]);
 
   const updateMutation = useMutation({
@@ -43,6 +45,14 @@ export function Settings() {
     });
   };
 
+  const handleLotNumberToggle = (checked: boolean) => {
+    setLotNumberRequired(checked);
+    updateMutation.mutate({
+      key: 'lot_number_required',
+      value: checked ? 'true' : 'false',
+    });
+  };
+
   if (isLoading) {
     return (
       <Group justify="center" mt="xl">
@@ -59,6 +69,54 @@ export function Settings() {
       </Group>
 
       <Stack gap="lg">
+        {/* Lot Number Configuration */}
+        <Card withBorder radius="md" p="lg">
+          <Group mb="md" gap="sm">
+            <Hash size={20} />
+            <Text fw={600} size="lg">
+              Lot Number Configuration
+            </Text>
+            <Badge
+              color={lotNumberRequired ? 'blue' : 'gray'}
+              variant="light"
+              size="sm"
+            >
+              {lotNumberRequired ? 'Required' : 'Optional'}
+            </Badge>
+          </Group>
+
+          <Divider mb="md" />
+
+          <Text size="sm" c="dimmed" mb="md">
+            Controls whether the Lot Number field is mandatory when submitting an inspection.
+          </Text>
+
+          <Paper withBorder p="md" radius="md" bg="gray.0">
+            <Group justify="space-between" align="flex-start">
+              <div style={{ flex: 1 }}>
+                <Group gap="xs" mb={4}>
+                  <Hash size={16} />
+                  <Text fw={600} size="sm">
+                    Require Lot Number
+                  </Text>
+                </Group>
+                <Text size="xs" c="dimmed">
+                  {lotNumberRequired
+                    ? 'Inspectors must enter a Lot Number before submitting. This is the default behavior.'
+                    : 'Lot Number is optional. Inspectors can submit without entering a Lot Number.'}
+                </Text>
+              </div>
+              <Switch
+                checked={lotNumberRequired}
+                onChange={(e) => handleLotNumberToggle(e.currentTarget.checked)}
+                color="blue"
+                size="md"
+              />
+            </Group>
+          </Paper>
+        </Card>
+
+        {/* Deletion Policy */}
         <Card withBorder radius="md" p="lg">
           <Group mb="md" gap="sm">
             <Trash2 size={20} />

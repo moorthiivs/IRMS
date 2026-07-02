@@ -51,6 +51,7 @@ export interface InspectionParameter {
   controlLimitMax: number | null;
   methodOfChecking: string | null;
   freqOfInspn: string | null;
+  frequencyUnit: string;
   leastCount: number | null;
   class: string | null;
   sequence: number;
@@ -62,7 +63,7 @@ export interface InspectionTransaction {
   shiftId: string;
   partId: string;
   operationId: string;
-  lotNumber: string;
+  lotNumber: string | null;
   mcNo: string | null;
   intervalName: string;
   inspectionTimestamp: string;
@@ -76,6 +77,7 @@ export interface InspectionTransaction {
   part?: Part;
   operation?: Operation;
   details?: InspectionDetail[];
+  corrections?: CorrectionEntry[];
 }
 
 export interface InspectionDetail {
@@ -85,6 +87,21 @@ export interface InspectionDetail {
   observedValue: string;
   status: 'PASS' | 'FAIL';
   parameter?: InspectionParameter;
+}
+
+export interface CorrectionEntry {
+  id: string;
+  transactionId: string;
+  detailId: string;
+  previousValue: string;
+  correctedValue: string;
+  previousStatus: 'PASS' | 'FAIL';
+  correctedStatus: 'PASS' | 'FAIL';
+  correctedById: string;
+  correctedAt: string;
+  remarks: string | null;
+  correctedBy?: { name: string; username: string };
+  detail?: InspectionDetail;
 }
 
 export interface UploadHistory {

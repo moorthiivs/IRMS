@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { 
   Title, Paper, Table, Group, Badge, ActionIcon, 
   Tabs, Select, TextInput, Button, Text, Tooltip,
-  Modal, Checkbox, SimpleGrid
+  Modal, Checkbox, SimpleGrid, Textarea, Timeline, ThemeIcon, Autocomplete
 } from '@mantine/core';
+import { DatePickerInput } from '@mantine/dates';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Eye, Printer, FileText, Search, LayoutGrid, CheckCircle, FileCheck } from 'lucide-react';
+import { Eye, Printer, FileText, Search, LayoutGrid, CheckCircle, FileCheck, Wrench, History, ArrowRight, Trash2 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { inspectionService } from '../services/inspection.service';
 import { masterDataService } from '../services/master-data.service';
@@ -13,6 +14,7 @@ import { useAuthStore } from '../store/auth-store';
 import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
 import { TableSkeleton } from '../components/TableSkeleton';
+import { CorrectionEntry } from '../types';
 
 function parseSpecText(specText: string | null): [string, string, string] {
   if (!specText) return ['', '', ''];
@@ -73,10 +75,12 @@ export function Reports() {
   const filterStatus = searchParams.get('status');
   const filterApproval = searchParams.get('approval');
 
+  // History Tab filter states
+  const [historyDate, setHistoryDate] = useState<Date | null>(null);
+  const [historyShift, setHistoryShift] = useState<string | null>(null);
+
   // Report filter states
-  const [selectedDate, setSelectedDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [selectedPart, setSelectedPart] = useState<string | null>(null);
   const [selectedOp, setSelectedOp] = useState<string | null>(null);
   const [selectedMcNo, setSelectedMcNo] = useState<string>('');
@@ -85,10 +89,34 @@ export function Reports() {
   const [approvalId, setApprovalId] = useState<string | null>(null);
   const [reviewedChecked, setReviewedChecked] = useState(false);
 
+  // Feature 5: Correction (Take Action) Modal State
+  const [correctionTx, setCorrectionTx] = useState<any | null>(null);
+  const [correctionValues, setCorrectionValues] = useState<Record<string, string>>({});
+  const [correctionRemarks, setCorrectionRemarks] = useState('');
+
+  // Feature 5: Audit Trail Drawer State
+  const [auditTrailId, setAuditTrailId] = useState<string | null>(null);
+  const [auditTrailData, setAuditTrailData] = useState<CorrectionEntry[]>([]);
+
   // 1. Transaction History Query
   const { data: recent = [], isLoading: isRecentLoading } = useQuery({
-    queryKey: ['recent-inspections', filterStatus, filterApproval],
-    queryFn: () => inspectionService.getRecent({ status: filterStatus, approval: filterApproval }),
+    queryKey: ['recent-inspections', filterStatus, filterApproval, historyDate, historyShift],
+    queryFn: () => {
+      const formattedDate = historyDate ? 
+        `${historyDate.getFullYear()}-${String(historyDate.getMonth() + 1).padStart(2, '0')}-${String(historyDate.getDate()).padStart(2, '0')}` 
+        : undefined;
+      return inspectionService.getRecent({ 
+        status: filterStatus, 
+        approval: filterApproval,
+        date: formattedDate,
+        shiftId: historyShift || undefined
+      });
+    },
+  });
+
+  const { data: shifts = [] } = useQuery({
+    queryKey: ['shifts'],
+    queryFn: masterDataService.getShifts
   });
 
   // 2. Dropdown queries for daily audit report
@@ -106,12 +134,17 @@ export function Reports() {
   // 3. Daily report transactions query
   const { data: dailyReportTransactions = [], refetch: refetchDailyReport, isFetching: isDailyFetching } = useQuery({
     queryKey: ['daily-report', selectedPart, selectedOp, selectedMcNo, selectedDate],
-    queryFn: () => inspectionService.getDailyReport({
-      partId: selectedPart!,
-      operationId: selectedOp!,
-      mcNo: selectedMcNo || undefined,
-      date: selectedDate
-    }),
+    queryFn: () => {
+      const formattedDate = selectedDate ? 
+        `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}` 
+        : undefined;
+      return inspectionService.getDailyReport({
+        partId: selectedPart!,
+        operationId: selectedOp!,
+        mcNo: selectedMcNo || undefined,
+        date: formattedDate
+      });
+    },
     enabled: false // Trigger manually on "Generate Report"
   });
 
@@ -130,6 +163,33 @@ export function Reports() {
     window.print();
   };
 
+  const deleteMutation = useMutation({
+    mutationFn: inspectionService.deleteInspection,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['recent-inspections'] });
+      queryClient.invalidateQueries({ queryKey: ['daily-report'] });
+      notifications.show({ title: 'Deleted', message: 'Inspection report deleted successfully.', color: 'green' });
+    },
+    onError: (err: any) => {
+      notifications.show({ title: 'Error', message: err?.response?.data?.message || 'Failed to delete report.', color: 'red' });
+    },
+  });
+
+  const handleDelete = (id: string) => {
+    modals.openConfirmModal({
+      title: 'Delete Inspection Report',
+      centered: true,
+      children: (
+        <Text size="sm">
+          Are you sure you want to delete this inspection report? This action cannot be undone.
+        </Text>
+      ),
+      labels: { confirm: 'Delete Report', cancel: 'Cancel' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => deleteMutation.mutate(id),
+    });
+  };
+
   // Approve mutation
   const approveMutation = useMutation({
     mutationFn: inspectionService.approveInspection,
@@ -145,6 +205,72 @@ export function Reports() {
       notifications.show({ title: 'Error', message: err?.response?.data?.message || 'Failed to approve.', color: 'red' });
     },
   });
+
+  // Feature 5: Correction mutation
+  const correctionMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: any }) =>
+      inspectionService.correctInspection(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['recent-inspections'] });
+      queryClient.invalidateQueries({ queryKey: ['daily-report'] });
+      setCorrectionTx(null);
+      setCorrectionValues({});
+      setCorrectionRemarks('');
+      notifications.show({ title: 'Correction Saved', message: 'Failed parameters have been corrected. Status has been re-evaluated.', color: 'green' });
+    },
+    onError: (err: any) => {
+      notifications.show({ title: 'Error', message: err?.response?.data?.message || 'Failed to save corrections.', color: 'red' });
+    },
+  });
+
+  // Feature 5: Open Take Action modal
+  const handleTakeAction = async (txId: string) => {
+    try {
+      const tx = await inspectionService.getById(txId);
+      setCorrectionTx(tx);
+      // Pre-fill correction values with current failed values
+      const initialValues: Record<string, string> = {};
+      tx.details?.filter(d => d.status === 'FAIL').forEach(d => {
+        initialValues[d.id] = d.observedValue;
+      });
+      setCorrectionValues(initialValues);
+      setCorrectionRemarks('');
+    } catch (err) {
+      notifications.show({ title: 'Error', message: 'Failed to load inspection details.', color: 'red' });
+    }
+  };
+
+  // Feature 5: Submit corrections
+  const handleSubmitCorrections = () => {
+    if (!correctionTx) return;
+    const corrections = Object.entries(correctionValues)
+      .filter(([detailId, value]) => {
+        const original = correctionTx.details?.find((d: any) => d.id === detailId);
+        return original && value !== original.observedValue; // Only send changed values
+      })
+      .map(([detailId, correctedValue]) => ({ detailId, correctedValue }));
+
+    if (corrections.length === 0) {
+      notifications.show({ title: 'No Changes', message: 'Please modify at least one value to submit a correction.', color: 'orange' });
+      return;
+    }
+
+    correctionMutation.mutate({
+      id: correctionTx.id,
+      payload: { corrections, remarks: correctionRemarks || undefined },
+    });
+  };
+
+  // Feature 5: Open Audit Trail
+  const handleViewAuditTrail = async (txId: string) => {
+    try {
+      const trail = await inspectionService.getAuditTrail(txId);
+      setAuditTrailData(trail);
+      setAuditTrailId(txId);
+    } catch (err) {
+      notifications.show({ title: 'Error', message: 'Failed to load audit trail.', color: 'red' });
+    }
+  };
 
   // Get inspector signature for a shift/interval
   const getInspectorSignature = (shiftName: string, intervalName: string) => {
@@ -396,32 +522,51 @@ export function Reports() {
         </Tabs.List>
 
         <Tabs.Panel value="history">
-          {(filterStatus || filterApproval) && (
-            <Paper withBorder p="sm" radius="md" mb="md" className="bg-blue-50">
-              <Group justify="space-between">
-                <Group gap="xs">
-                  <Text size="sm" fw={600}>Active Filter:</Text>
-                  {filterStatus && (
-                    <Badge color={filterStatus === 'PASSED' ? 'green' : 'red'} variant="filled">
-                      {filterStatus}
-                    </Badge>
-                  )}
-                  {filterApproval === 'pending' && (
-                    <Badge color="violet" variant="filled">
-                      Approval Pending
-                    </Badge>
-                  )}
-                </Group>
-                <Button
+          <Paper withBorder p="sm" radius="md" mb="md" className="bg-blue-50">
+            <Group justify="space-between" align="center">
+              <Group gap="xs" align="center">
+                <Text size="sm" fw={600} mr="sm">Filters:</Text>
+                <DatePickerInput
+                  placeholder="Select Date"
                   size="xs"
-                  variant="subtle"
-                  onClick={() => setSearchParams({})}
-                >
-                  Clear Filter
-                </Button>
+                  value={historyDate}
+                  onChange={setHistoryDate}
+                  clearable
+                  style={{ width: 140 }}
+                />
+                <Select
+                  placeholder="Select Shift"
+                  size="xs"
+                  data={shifts.map((s: any) => ({ value: s.id, label: s.name }))}
+                  value={historyShift}
+                  onChange={setHistoryShift}
+                  clearable
+                  style={{ width: 150 }}
+                />
+                {filterStatus && (
+                  <Badge color={filterStatus === 'PASSED' ? 'green' : 'red'} variant="filled">
+                    {filterStatus}
+                  </Badge>
+                )}
+                {filterApproval === 'pending' && (
+                  <Badge color="violet" variant="filled">
+                    Approval Pending
+                  </Badge>
+                )}
               </Group>
-            </Paper>
-          )}
+              <Button
+                size="xs"
+                variant="subtle"
+                onClick={() => {
+                  setSearchParams({});
+                  setHistoryDate(null);
+                  setHistoryShift(null);
+                }}
+              >
+                Clear Filters
+              </Button>
+            </Group>
+          </Paper>
           <Paper withBorder p="md" radius="md">
             {isRecentLoading ? (
               <TableSkeleton rows={8} />
@@ -460,7 +605,29 @@ export function Reports() {
                           <ActionIcon variant="light" color="gray" onClick={() => navigate(`/reports/${item.id}`)}>
                             <Printer size={16} />
                           </ActionIcon>
-                          {!item.approvedById && isAdmin && (
+                          {/* Feature 5: Take Action for rejected reports */}
+                          {item.status === 'REJECTED' && (
+                            <Tooltip label="Take Action — Correct failed values">
+                              <ActionIcon
+                                variant="light"
+                                color="orange"
+                                onClick={() => handleTakeAction(item.id)}
+                              >
+                                <Wrench size={16} />
+                              </ActionIcon>
+                            </Tooltip>
+                          )}
+                          {/* Feature 5: Audit Trail */}
+                          <Tooltip label="View Audit Trail">
+                            <ActionIcon
+                              variant="light"
+                              color="cyan"
+                              onClick={() => handleViewAuditTrail(item.id)}
+                            >
+                              <History size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                          {item.status === 'PASSED' && !item.approvedById && isAdmin && (
                             <ActionIcon
                               variant="light"
                               color="violet"
@@ -472,6 +639,18 @@ export function Reports() {
                             >
                               <FileCheck size={16} />
                             </ActionIcon>
+                          )}
+                          {isAdmin && (
+                            <Tooltip label="Delete Report">
+                              <ActionIcon
+                                variant="light"
+                                color="red"
+                                onClick={() => handleDelete(item.id)}
+                                loading={deleteMutation.isPending}
+                              >
+                                <Trash2 size={16} />
+                              </ActionIcon>
+                            </Tooltip>
                           )}
                         </Group>
                       </Table.Td>
@@ -487,11 +666,12 @@ export function Reports() {
         <Tabs.Panel value="daily">
           <Paper withBorder p="md" radius="md" mb="lg">
             <SimpleGrid cols={{ base: 1, sm: 2, lg: 5 }} spacing="md">
-              <TextInput
-                type="date"
+              <DatePickerInput
                 label="Select Date"
+                placeholder="Select date"
                 value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                onChange={setSelectedDate}
+                clearable
               />
               <Select
                 label="Part Number"
@@ -558,6 +738,170 @@ export function Reports() {
         </Group>
       </Modal>
 
+      {/* Feature 5: Take Action (Correction) Modal */}
+      <Modal
+        opened={!!correctionTx}
+        onClose={() => { setCorrectionTx(null); setCorrectionValues({}); setCorrectionRemarks(''); }}
+        title="Take Action — Correct Failed Parameters"
+        size="lg"
+      >
+        {correctionTx && (
+          <div>
+            <Paper withBorder p="sm" radius="md" mb="md" className="bg-red-50">
+              <Group gap="xs" mb="xs">
+                <Badge color="red" variant="filled" size="sm">REJECTED</Badge>
+                <Text size="sm" fw={600}>
+                  {correctionTx.part?.partNumber} / {correctionTx.operation?.operationNumber}
+                </Text>
+              </Group>
+              <Text size="xs" c="dimmed">
+                {correctionTx.shift?.name} — {correctionTx.intervalName} — {new Date(correctionTx.inspectionTimestamp).toLocaleString()}
+              </Text>
+            </Paper>
+
+            <Text size="sm" fw={600} mb="sm">Failed Parameters (editable):</Text>
+
+            <Table withTableBorder withColumnBorders verticalSpacing="sm">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Parameter</Table.Th>
+                  <Table.Th>Specification</Table.Th>
+                  <Table.Th>Original Value</Table.Th>
+                  <Table.Th>Corrected Value</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {correctionTx.details?.filter((d: any) => d.status === 'FAIL').map((detail: any) => (
+                  <Table.Tr key={detail.id}>
+                    <Table.Td>
+                      <Text size="sm" fw={500}>{detail.parameter?.parameterName}</Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs">{detail.parameter?.specText || '-'}</Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge color="red" variant="light">{detail.observedValue}</Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      {detail.parameter?.controlLimitMin !== null ? (
+                        <TextInput
+                          size="sm"
+                          value={correctionValues[detail.id] || ''}
+                          onChange={(e) => setCorrectionValues(prev => ({ ...prev, [detail.id]: e.target.value }))}
+                          onBlur={(e) => {
+                            const val = e.target.value;
+                            const lc = detail.parameter?.leastCount;
+                            if (lc && lc > 0) {
+                              const decimalPlaces = Math.round(-Math.log10(lc));
+                              const parts = val.split('.');
+                              if (parts.length === 2 && parts[1].length > decimalPlaces) {
+                                setCorrectionValues(prev => ({ ...prev, [detail.id]: parseFloat(val).toFixed(decimalPlaces) }));
+                              }
+                            }
+                          }}
+                          placeholder="Enter corrected value"
+                          type="number"
+                          inputMode="decimal"
+                          step={detail.parameter?.leastCount && detail.parameter.leastCount > 0 ? String(detail.parameter.leastCount) : '0.001'}
+                        />
+                      ) : (
+                        <Autocomplete
+                          size="sm"
+                          value={correctionValues[detail.id] || ''}
+                          onChange={(val) => setCorrectionValues(prev => ({ ...prev, [detail.id]: val }))}
+                          placeholder="Select or type OK/NG"
+                          data={['OK', 'NG']}
+                        />
+                      )}
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+
+            <Textarea
+              label="Correction Remarks"
+              placeholder="Reason for correction..."
+              value={correctionRemarks}
+              onChange={(e) => setCorrectionRemarks(e.target.value)}
+              mt="md"
+            />
+
+            <Group justify="flex-end" mt="lg">
+              <Button variant="default" onClick={() => { setCorrectionTx(null); setCorrectionValues({}); setCorrectionRemarks(''); }}>
+                Cancel
+              </Button>
+              <Button
+                color="orange"
+                loading={correctionMutation.isPending}
+                onClick={handleSubmitCorrections}
+                leftSection={<Wrench size={16} />}
+              >
+                Submit Corrections
+              </Button>
+            </Group>
+          </div>
+        )}
+      </Modal>
+
+      {/* Feature 5: Audit Trail Drawer */}
+      <Modal
+        opened={!!auditTrailId}
+        onClose={() => { setAuditTrailId(null); setAuditTrailData([]); }}
+        title="Audit Trail — Correction History"
+        size="lg"
+      >
+        {auditTrailData.length === 0 ? (
+          <Paper withBorder p="xl" radius="md">
+            <Text ta="center" c="dimmed">No corrections have been made to this inspection.</Text>
+          </Paper>
+        ) : (
+          <Timeline active={auditTrailData.length - 1} bulletSize={28} lineWidth={2}>
+            {auditTrailData.map((entry) => (
+              <Timeline.Item
+                key={entry.id}
+                bullet={
+                  <ThemeIcon
+                    size={28}
+                    variant="filled"
+                    color={entry.correctedStatus === 'PASS' ? 'green' : 'orange'}
+                    radius="xl"
+                  >
+                    <Wrench size={14} />
+                  </ThemeIcon>
+                }
+                title={
+                  <Group gap="xs">
+                    <Text size="sm" fw={600}>{entry.detail?.parameter?.parameterName || 'Parameter'}</Text>
+                    <Badge
+                      color={entry.correctedStatus === 'PASS' ? 'green' : 'red'}
+                      variant="light"
+                      size="xs"
+                    >
+                      {entry.correctedStatus}
+                    </Badge>
+                  </Group>
+                }
+              >
+                <Group gap="sm" mt="xs">
+                  <Badge color="red" variant="light" size="sm">{entry.previousValue}</Badge>
+                  <ArrowRight size={14} className="text-gray-400" />
+                  <Badge color="green" variant="light" size="sm">{entry.correctedValue}</Badge>
+                </Group>
+                <Text size="xs" c="dimmed" mt={4}>
+                  By {entry.correctedBy?.name || 'Unknown'} at {new Date(entry.correctedAt).toLocaleString()}
+                </Text>
+                {entry.remarks && (
+                  <Text size="xs" c="dimmed" fs="italic" mt={2}>
+                    Remarks: {entry.remarks}
+                  </Text>
+                )}
+              </Timeline.Item>
+            ))}
+          </Timeline>
+        )}
+      </Modal>
+
       {/* Daily Audit Report Display (A4 Landscape Print Format) */}
       {activeTab === 'daily' && dailyReportTransactions.length > 0 && (
         <div className="mt-2 print:mt-0">
@@ -581,7 +925,7 @@ export function Reports() {
                     </div>
                   </div>
                   <div className="mt-3 space-y-1 text-xs">
-                    <div>Date : <span className="font-bold underline pl-1">{new Date(selectedDate).toLocaleDateString()}</span></div>
+                    <div>Date : <span className="font-bold underline pl-1">{selectedDate ? selectedDate.toLocaleDateString() : 'N/A'}</span></div>
                     <div>M/c No. : <span className="font-bold underline pl-1">{selectedMcNo || dailyReportTransactions[0]?.mcNo || 'N/A'}</span></div>
                   </div>
                 </div>

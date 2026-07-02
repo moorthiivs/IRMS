@@ -50,6 +50,22 @@ async function main() {
   });
 
   console.log('Users seeded (admin/admin123 and inspector/inspector123).');
+
+  // 3. Seed Default System Settings
+  const defaultSettings = [
+    { key: 'deletion_policy', value: 'strict' },
+    { key: 'lot_number_required', value: 'true' },
+    { key: 'frequency_unit', value: 'shift' },
+  ];
+
+  for (const setting of defaultSettings) {
+    await prisma.systemSettings.upsert({
+      where: { key: setting.key },
+      update: {},
+      create: { id: setting.key, key: setting.key, value: setting.value },
+    });
+  }
+  console.log('Default settings seeded.');
 }
 
 main()

@@ -41,6 +41,7 @@ model User {
   approvals    InspectionTransaction[] @relation("ApprovedBy")
   uploads      UploadHistory[]
   drafts       InspectionDraft[]
+  corrections  CorrectionEntry[]       @relation("CorrectedBy")
 }
 
 model Shift {
@@ -94,6 +95,7 @@ model InspectionParameter {
   controlLimitMax     Float?             // Numeric maximum limit if applicable (e.g. 61.2)
   methodOfChecking    String?            // E.g., "Air gauge", "Vernier"
   freqOfInspn         String?            // E.g., "4nos/shift", "1no/shift"
+  frequencyUnit       String             @default("shift") // "shift" or "day"
   leastCount          Float?             // Least count (measurement precision) e.g., 0.01, 0.001
   class               String?            // E.g., "SC" or null
   sequence            Int                @default(0) // Sorting order
@@ -110,7 +112,7 @@ model InspectionTransaction {
   shiftId             String?
   partId              String
   operationId         String
-  lotNumber           String             // Batch/Lot Number
+  lotNumber           String?            // Batch/Lot Number (optional based on setting)
   mcNo                String?            // Machine Number e.g. CNC80
   intervalName        String             // "1 Half" or "2 Half" (or direct interval index)
   inspectionTimestamp DateTime           @default(now())
@@ -124,6 +126,7 @@ model InspectionTransaction {
   part                Part               @relation(fields: [partId], references: [id])
   operation           Operation          @relation(fields: [operationId], references: [id])
   details             InspectionDetail[]
+  corrections         CorrectionEntry[]
 }
 
 model InspectionDetail {
@@ -134,6 +137,7 @@ model InspectionDetail {
   status        ValidationStatus    // PASS or FAIL
   transaction   InspectionTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   parameter     InspectionParameter   @relation(fields: [parameterId], references: [id])
+  corrections   CorrectionEntry[]
 }
 
 model UploadHistory {
@@ -173,4 +177,21 @@ model InspectionDraft {
   operation       Operation @relation(fields: [operationId], references: [id])
 
   @@unique([userId, partId, operationId])
+}
+
+model CorrectionEntry {
+  id                String              @id @default(uuid())
+  transactionId     String
+  detailId          String
+  previousValue     String
+  correctedValue    String
+  previousStatus    ValidationStatus
+  correctedStatus   ValidationStatus
+  correctedById     String
+  correctedAt       DateTime            @default(now())
+  remarks           String?
+
+  transaction       InspectionTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  detail            InspectionDetail      @relation(fields: [detailId], references: [id], onDelete: Cascade)
+  correctedBy       User                  @relation("CorrectedBy", fields: [correctedById], references: [id])
 }

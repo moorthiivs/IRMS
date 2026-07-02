@@ -25,8 +25,8 @@ export class CreateInspectionDto {
   shiftId?: string;
 
   @IsString()
-  @IsNotEmpty()
-  lotNumber: string;
+  @IsOptional()
+  lotNumber?: string;
 
   @IsString()
   @IsOptional()

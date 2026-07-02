@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Body, Query, Param, UseGuards, Request } from '@nestjs/common';
 import { InspectionsService } from './inspections.service';
 import { CreateInspectionDto } from './dto/create-inspection.dto';
+import { CorrectInspectionDto } from './dto/correct-inspection.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -50,8 +51,10 @@ export class InspectionsController {
   async getRecent(
     @Query('status') status?: string,
     @Query('approval') approval?: string,
+    @Query('date') date?: string,
+    @Query('shiftId') shiftId?: string,
   ) {
-    return this.inspectionsService.getRecentInspections(status, approval);
+    return this.inspectionsService.getRecentInspections(status, approval, date, shiftId);
   }
 
   @Get('daily')
@@ -69,9 +72,27 @@ export class InspectionsController {
     return this.inspectionsService.getInspectionById(id);
   }
 
+  @Get(':id/audit-trail')
+  async getAuditTrail(@Param('id') id: string) {
+    return this.inspectionsService.getAuditTrail(id);
+  }
+
   @Roles(Role.ADMIN)
   @Patch(':id/approve')
   async approve(@Param('id') id: string, @Request() req) {
     return this.inspectionsService.approveInspection(id, req.user.id);
+  }
+
+  @Patch(':id/correct')
+  async correctInspection(
+    @Param('id') id: string,
+    @Body() dto: CorrectInspectionDto,
+    @Request() req,
+  ) {
+    return this.inspectionsService.correctInspection(id, req.user.id, dto);
+  }
+  @Delete(':id')
+  async deleteInspection(@Param('id') id: string) {
+    return this.inspectionsService.deleteInspection(id);
   }
 }

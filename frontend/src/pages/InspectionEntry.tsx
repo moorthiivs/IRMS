@@ -1,17 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
   Paper, Title, Group, Select, TextInput, Button, 
   Table, Badge, Textarea, Affix, Transition, Text, Autocomplete, SimpleGrid,
-  Progress, Card
+  Progress, Card, SegmentedControl, Alert
 } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
-import { Check, Save, X, AlertTriangle } from 'lucide-react';
+import { Check, Save, X, AlertTriangle, Info, Filter, SkipForward } from 'lucide-react';
 import { masterDataService } from '../services/master-data.service';
 import { inspectionService } from '../services/inspection.service';
+import { settingsService } from '../services/settings.service';
 import { CheckCircle2, XCircle, ArrowLeft, ArrowRight } from 'lucide-react';
 import { TableSkeleton } from '../components/TableSkeleton';
 
@@ -24,12 +25,22 @@ export function InspectionEntry() {
   const [selectedOp, setSelectedOp] = useState<string | null>(queryOp);
   const [submitting, setSubmitting] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
+  const [mobileViewMode, setMobileViewMode] = useState<string>('single');
+  const [methodFilter, setMethodFilter] = useState<string | null>(null);
   const isMobile = useMediaQuery('(max-width: 768px)');
 
   useEffect(() => {
     if (queryPart) setSelectedPart(queryPart);
     if (queryOp) setSelectedOp(queryOp);
   }, [queryPart, queryOp]);
+
+  // Fetch settings (Feature 1: lot number)
+  const { data: settings = {} } = useQuery({
+    queryKey: ['settings'],
+    queryFn: settingsService.getAll,
+  });
+
+  const lotNumberRequired = settings.lot_number_required !== 'false';
 
   const { data: drafts = [], refetch: refetchDrafts } = useQuery({
     queryKey: ['drafts'],
@@ -114,6 +125,32 @@ export function InspectionEntry() {
     enabled: !!selectedPart && !!selectedOp
   });
 
+  // Feature 6: Derive unique method-of-checking values for filter
+  const uniqueMethods = useMemo(() => {
+    const methods = parameters
+      .map(p => p.methodOfChecking)
+      .filter((m): m is string => !!m && m.trim() !== '');
+    return [...new Set(methods)].sort();
+  }, [parameters]);
+
+  // Feature 6: Apply method filter
+  const filteredParameters = useMemo(() => {
+    if (!methodFilter) return parameters;
+    return parameters.filter(p => p.methodOfChecking === methodFilter);
+  }, [parameters, methodFilter]);
+
+  // Feature 3: Day-wise frequency check helper
+  const isDayWiseAlreadyRecorded = (param: typeof parameters[0]): boolean => {
+    if (param.frequencyUnit !== 'day') return false;
+    const freq = String(param.freqOfInspn || '').toLowerCase().trim();
+    const isFreq1 = freq === '1' || freq === '1no/shift' || freq === '1/shift' || freq === '1/day' || freq === 'once per shift';
+    if (!isFreq1) return false;
+    // Check if any shift today already has a reading for this param
+    return todayTransactions.some(tx =>
+      tx.details?.some(d => d.parameterId === param.id)
+    );
+  };
+
   const getReadingCount = (freq: string | null | undefined, interval: string): number => {
     if (!freq) return 1;
     const lowerFreq = freq.toLowerCase().trim();
@@ -148,8 +185,27 @@ export function InspectionEntry() {
     }
   });
 
+  // Feature 4: Auto-advance interval when shift is selected
+  useEffect(() => {
+    if (form.values.shiftId && todayTransactions.length > 0) {
+      const has1Half = todayTransactions.some(
+        t => t.shiftId === form.values.shiftId && t.intervalName === '1 Half'
+      );
+      const has2Half = todayTransactions.some(
+        t => t.shiftId === form.values.shiftId && t.intervalName === '2 Half'
+      );
+      
+      if (has1Half && !has2Half) {
+        form.setFieldValue('intervalName', '2 Half');
+      }
+    }
+  }, [form.values.shiftId, todayTransactions]);
+
   // Calculate PASS/FAIL status for a parameter
   const getStatus = (param: typeof parameters[0]): 'PASS' | 'FAIL' | null => {
+    // If day-wise and already recorded, treat as PASS
+    if (isDayWiseAlreadyRecorded(param)) return 'PASS';
+
     const count = getReadingCount(param.freqOfInspn, form.values.intervalName);
     
     let hasReadings = false;
@@ -192,6 +248,17 @@ export function InspectionEntry() {
   const handleSubmit = async (values: typeof form.values) => {
     if (!selectedPart || !selectedOp) return;
 
+    // Feature 1: Validate lot number based on setting
+    if (lotNumberRequired && (!values.lotNumber || values.lotNumber.trim() === '')) {
+      notifications.show({
+        title: 'Lot Number Required',
+        message: 'Please enter a Lot Number. You can make it optional in Settings.',
+        color: 'orange',
+        icon: <AlertTriangle size={16} />
+      });
+      return;
+    }
+
     // Duplicate submission check
     const isDuplicate = todayTransactions.some(
       (t) => t.shiftId === values.shiftId && t.intervalName === values.intervalName
@@ -211,6 +278,9 @@ export function InspectionEntry() {
       const details: { parameterId: string; observedValue: string }[] = [];
 
       for (const param of parameters) {
+        // Feature 3: Skip day-wise already-recorded params
+        if (isDayWiseAlreadyRecorded(param)) continue;
+
         const count = getReadingCount(param.freqOfInspn, values.intervalName);
         for (let idx = 0; idx < count; idx++) {
           const val = values.readings[`${param.id}_${idx}`];
@@ -250,7 +320,7 @@ export function InspectionEntry() {
         mcNo: values.mcNo,
         partId: selectedPart,
         operationId: selectedOp,
-        lotNumber: values.lotNumber,
+        lotNumber: values.lotNumber || undefined,
         intervalName: values.intervalName,
         remarks: values.remarks,
         details,
@@ -282,6 +352,7 @@ export function InspectionEntry() {
     }
   };
 
+  // Use all parameters for status calculation, but filteredParameters for display
   const statuses = parameters.map(p => getStatus(p));
   const allPassed = statuses.length > 0 && statuses.every(s => s === 'PASS');
   const anyFailed = statuses.some(s => s === 'FAIL');
@@ -291,6 +362,22 @@ export function InspectionEntry() {
   const isDuplicate = todayTransactions.some(
     (t) => t.shiftId === form.values.shiftId && t.intervalName === form.values.intervalName
   );
+
+  // Feature 2: Find first pending parameter index (in filtered list) for mobile "Jump to Pending"
+  const firstPendingIndex = useMemo(() => {
+    for (let i = 0; i < filteredParameters.length; i++) {
+      if (getStatus(filteredParameters[i]) === null) return i;
+    }
+    return -1;
+  }, [filteredParameters, form.values.readings, form.values.intervalName]);
+
+  // Feature 4: Check if 1st half is already done for selected shift
+  const is1HalfDone = form.values.shiftId
+    ? todayTransactions.some(t => t.shiftId === form.values.shiftId && t.intervalName === '1 Half')
+    : false;
+
+  // Lot number disable condition (updated for Feature 1)
+  const submitDisabled = (lotNumberRequired && !form.values.lotNumber) || totalReadingsEntered === 0 || isDuplicate;
 
   return (
     <div className="pb-24">
@@ -306,6 +393,7 @@ export function InspectionEntry() {
               setSelectedPart(val);
               setSelectedOp(null);
               setActiveStep(0);
+              setMethodFilter(null);
               setSearchParams(val ? { partId: val } : {});
             }}
             placeholder="Select Part Number"
@@ -318,6 +406,7 @@ export function InspectionEntry() {
             onChange={(val) => {
               setSelectedOp(val);
               setActiveStep(0);
+              setMethodFilter(null);
               if (selectedPart) {
                 setSearchParams({ partId: selectedPart, opId: val || '' });
               }
@@ -352,19 +441,37 @@ export function InspectionEntry() {
           />
           <Select
             label="Interval"
-            data={['1 Half', '2 Half', 'First Piece', 'Last Piece']}
+            data={[
+              { value: '1 Half', label: '1 Half', disabled: is1HalfDone },
+              { value: '2 Half', label: '2 Half' },
+              { value: 'First Piece', label: 'First Piece' },
+              { value: 'Last Piece', label: 'Last Piece' }
+            ]}
             disabled={!selectedPart || !selectedOp}
             {...form.getInputProps('intervalName')}
           />
           <TextInput
-            label="Lot Number"
+            label={`Lot Number${lotNumberRequired ? '' : ' (Optional)'}`}
             placeholder="e.g. L-1234"
-            required
+            required={lotNumberRequired}
             disabled={!selectedPart || !selectedOp}
             {...form.getInputProps('lotNumber')}
           />
         </SimpleGrid>
       </Paper>
+
+      {/* Feature 4: Auto-advance info banner */}
+      {is1HalfDone && form.values.intervalName === '2 Half' && (
+        <Alert
+          icon={<Info size={16} />}
+          title="1st Half Already Completed"
+          color="blue"
+          variant="light"
+          mb="md"
+        >
+          The 1st Half inspection has already been submitted for this shift. You are now entering the 2nd Half.
+        </Alert>
+      )}
 
       {selectedPart && selectedOp && (
         <Paper withBorder p="md" radius="md" mb="xl" className="bg-blue-50/20 border-blue-200">
@@ -404,11 +511,38 @@ export function InspectionEntry() {
         </Paper>
       )}
 
+      {/* Feature 6: Method of Checking Filter */}
+      {parameters.length > 0 && uniqueMethods.length > 1 && (
+        <Paper withBorder p="sm" radius="md" mb="md" className="bg-gray-50">
+          <Group gap="sm" align="center">
+            <Select
+              label="Filter by Method of Checking"
+              placeholder="All Methods"
+              data={uniqueMethods.map(m => ({ value: m, label: m }))}
+              value={methodFilter}
+              onChange={(val) => {
+                setMethodFilter(val);
+                setActiveStep(0);
+              }}
+              clearable
+              size="sm"
+              leftSection={<Filter size={16} className="text-gray-500" />}
+              style={{ minWidth: 250 }}
+            />
+            {methodFilter && (
+              <Badge color="blue" variant="light" size="lg" mt={24}>
+                Showing {filteredParameters.length} of {parameters.length} parameters
+              </Badge>
+            )}
+          </Group>
+        </Paper>
+      )}
+
       {isParamsLoading ? (
         <Paper withBorder p="md" radius="md">
            <TableSkeleton rows={4} />
         </Paper>
-      ) : parameters.length > 0 && (
+      ) : filteredParameters.length > 0 && (
         <>
           {/* Desktop Table View */}
           <Paper withBorder p={0} radius="md" className="hidden md:block overflow-hidden mb-8">
@@ -424,64 +558,72 @@ export function InspectionEntry() {
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {parameters.map((param) => {
+                {filteredParameters.map((param) => {
                   const status = getStatus(param);
                   const count = getReadingCount(param.freqOfInspn, form.values.intervalName);
+                  const dayWiseRecorded = isDayWiseAlreadyRecorded(param);
                   return (
-                    <Table.Tr key={param.id}>
+                    <Table.Tr key={param.id} className={dayWiseRecorded ? 'opacity-60' : ''}>
                       <Table.Td className="font-medium">
                         <div>{param.parameterName}</div>
                         <div className="text-xs text-gray-500 font-normal">Freq: {param.freqOfInspn || 'N/A'}</div>
+                        {dayWiseRecorded && (
+                          <Badge color="teal" size="xs" variant="light" mt={2}>Already recorded today</Badge>
+                        )}
                       </Table.Td>
                       <Table.Td>{param.specText || `${param.nominalValue} +${param.upperTolerance}/${param.lowerTolerance}`}</Table.Td>
                       <Table.Td>{param.methodOfChecking}</Table.Td>
                       <Table.Td style={{ minWidth: 220 }}>
-                        <div className="flex flex-col gap-2">
-                          {Array.from({ length: count }).map((_, idx) => {
-                            const isNumeric = param.controlLimitMin !== null || param.controlLimitMax !== null;
-                            // Calculate allowed decimal places from LC
-                            const lc = param.leastCount;
-                            const decimalPlaces = lc && lc > 0 ? Math.round(-Math.log10(lc)) : undefined;
-                            const stepVal = lc && lc > 0 ? String(lc) : '0.001';
+                        {dayWiseRecorded ? (
+                          <Text size="sm" c="dimmed" fs="italic">Recorded in earlier shift</Text>
+                        ) : (
+                          <div className="flex flex-col gap-2">
+                            {Array.from({ length: count }).map((_, idx) => {
+                              const isNumeric = param.controlLimitMin !== null || param.controlLimitMax !== null;
+                              // Calculate allowed decimal places from LC
+                              const lc = param.leastCount;
+                              const decimalPlaces = lc && lc > 0 ? Math.round(-Math.log10(lc)) : undefined;
+                              const stepVal = lc && lc > 0 ? String(lc) : '0.001';
 
-                            const validateLcPrecision = (value: string) => {
-                              if (!lc || lc <= 0 || !decimalPlaces) return;
-                              const parts = value.split('.');
-                              if (parts.length === 2 && parts[1].length > decimalPlaces) {
-                                // Truncate to allowed decimal places
-                                const truncated = parseFloat(value).toFixed(decimalPlaces);
-                                form.setFieldValue(`readings.${param.id}_${idx}`, truncated);
-                              }
-                            };
+                              const validateLcPrecision = (value: string) => {
+                                if (!lc || lc <= 0 || !decimalPlaces) return;
+                                const parts = value.split('.');
+                                if (parts.length === 2 && parts[1].length > decimalPlaces) {
+                                  // Truncate to allowed decimal places
+                                  const truncated = parseFloat(value).toFixed(decimalPlaces);
+                                  form.setFieldValue(`readings.${param.id}_${idx}`, truncated);
+                                }
+                              };
 
-                            return isNumeric ? (
-                              <div key={idx}>
-                                <TextInput
-                                  placeholder={`Reading ${idx + 1}`}
-                                  type="number"
-                                  inputMode="decimal"
-                                  step={stepVal}
+                              return isNumeric ? (
+                                <div key={idx}>
+                                  <TextInput
+                                    placeholder={`Reading ${idx + 1}`}
+                                    type="number"
+                                    inputMode="decimal"
+                                    step={stepVal}
+                                    size="sm"
+                                    {...form.getInputProps(`readings.${param.id}_${idx}`)}
+                                    onBlur={(e) => {
+                                      validateLcPrecision(e.target.value);
+                                    }}
+                                  />
+                                  {lc && (
+                                    <Text size="xs" c="dimmed" mt={2}>LC: {lc}</Text>
+                                  )}
+                                </div>
+                              ) : (
+                                <Autocomplete
+                                  key={idx}
+                                  placeholder="Select or type OK/NG"
+                                  data={['OK', 'NG']}
                                   size="sm"
                                   {...form.getInputProps(`readings.${param.id}_${idx}`)}
-                                  onBlur={(e) => {
-                                    validateLcPrecision(e.target.value);
-                                  }}
                                 />
-                                {lc && (
-                                  <Text size="xs" c="dimmed" mt={2}>LC: {lc}</Text>
-                                )}
-                              </div>
-                            ) : (
-                              <Autocomplete
-                                key={idx}
-                                placeholder="Select or type OK/NG"
-                                data={['OK', 'NG']}
-                                size="sm"
-                                {...form.getInputProps(`readings.${param.id}_${idx}`)}
-                              />
-                            );
-                          })}
-                        </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </Table.Td>
                       <Table.Td>
                         {status === 'PASS' && (
@@ -507,148 +649,299 @@ export function InspectionEntry() {
           </div>
         </Paper>
 
-        {/* Mobile Wizard View */}
+        {/* Mobile View — Feature 2: List/Single toggle */}
         <div className="block md:hidden mb-8">
-          <div className="mb-4">
-            <Group justify="space-between" mb="xs">
-              <Select
-                size="xs"
-                variant="filled"
-                value={String(activeStep)}
-                onChange={(val) => val && setActiveStep(Number(val))}
-                data={parameters.map((_, idx) => ({ value: String(idx), label: `Parameter ${idx + 1} of ${parameters.length}` }))}
-                styles={{ input: { fontWeight: 600, width: 140 } }}
-                allowDeselect={false}
-              />
-              <Text size="sm" fw={500} c="blue">{completionPercentage}% completed</Text>
-            </Group>
-            <Progress value={completionPercentage} size="md" color="blue" radius="xl" />
-          </div>
+          {/* View Mode Toggle */}
+          <Group justify="space-between" mb="md">
+            <SegmentedControl
+              value={mobileViewMode}
+              onChange={setMobileViewMode}
+              data={[
+                { label: 'Single Item', value: 'single' },
+                { label: 'List View', value: 'list' },
+              ]}
+              size="sm"
+            />
+            <Text size="sm" fw={500} c="blue">{completionPercentage}% done</Text>
+          </Group>
 
-          <Card withBorder shadow="sm" radius="md" p="md">
-            {(() => {
-              const param = parameters[activeStep];
-              if (!param) return null;
-              const status = getStatus(param);
-              const count = getReadingCount(param.freqOfInspn, form.values.intervalName);
-              const isNumeric = param.controlLimitMin !== null || param.controlLimitMax !== null;
-              const lc = param.leastCount;
-              const decimalPlaces = lc && lc > 0 ? Math.round(-Math.log10(lc)) : undefined;
-              const stepVal = lc && lc > 0 ? String(lc) : '0.001';
+          {mobileViewMode === 'list' ? (
+            /* Mobile List View */
+            <Paper withBorder radius="md" p={0} className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table striped highlightOnHover verticalSpacing="sm" style={{ minWidth: 500 }}>
+                  <Table.Thead className="bg-gray-50">
+                    <Table.Tr>
+                      <Table.Th style={{ width: 40 }}>#</Table.Th>
+                      <Table.Th>Parameter</Table.Th>
+                      <Table.Th>Spec</Table.Th>
+                      <Table.Th style={{ minWidth: 140 }}>Reading</Table.Th>
+                      <Table.Th style={{ width: 60 }}>Status</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {filteredParameters.map((param, idx) => {
+                      const status = getStatus(param);
+                      const count = getReadingCount(param.freqOfInspn, form.values.intervalName);
+                      const isNumeric = param.controlLimitMin !== null || param.controlLimitMax !== null;
+                      const dayWiseRecorded = isDayWiseAlreadyRecorded(param);
+                      const lc = param.leastCount;
+                      const decimalPlaces = lc && lc > 0 ? Math.round(-Math.log10(lc)) : undefined;
+                      const stepVal = lc && lc > 0 ? String(lc) : '0.001';
 
-              const validateLcPrecision = (value: string, idx: number) => {
-                if (!lc || lc <= 0 || !decimalPlaces) return;
-                const parts = value.split('.');
-                if (parts.length === 2 && parts[1].length > decimalPlaces) {
-                  const truncated = parseFloat(value).toFixed(decimalPlaces);
-                  form.setFieldValue(`readings.${param.id}_${idx}`, truncated);
-                }
-              };
+                      return (
+                        <Table.Tr key={param.id} className={dayWiseRecorded ? 'opacity-60' : ''}>
+                          <Table.Td className="text-center text-xs font-semibold">{idx + 1}</Table.Td>
+                          <Table.Td>
+                            <Text size="xs" fw={600} lineClamp={1}>{param.parameterName}</Text>
+                            <Text size="xs" c="dimmed">{param.methodOfChecking}</Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <Text size="xs" lineClamp={1}>{param.specText || '-'}</Text>
+                          </Table.Td>
+                          <Table.Td>
+                            {dayWiseRecorded ? (
+                              <Text size="xs" c="dimmed" fs="italic">Done</Text>
+                            ) : (
+                              <div className="flex flex-col gap-1">
+                                {Array.from({ length: count }).map((_, readIdx) => (
+                                  isNumeric ? (
+                                    <TextInput
+                                      key={readIdx}
+                                      placeholder={`R${readIdx + 1}`}
+                                      type="number"
+                                      inputMode="decimal"
+                                      step={stepVal}
+                                      size="xs"
+                                      {...form.getInputProps(`readings.${param.id}_${readIdx}`)}
+                                      onBlur={(e) => {
+                                        if (!lc || lc <= 0 || !decimalPlaces) return;
+                                        const parts = e.target.value.split('.');
+                                        if (parts.length === 2 && parts[1].length > decimalPlaces) {
+                                          const truncated = parseFloat(e.target.value).toFixed(decimalPlaces);
+                                          form.setFieldValue(`readings.${param.id}_${readIdx}`, truncated);
+                                        }
+                                      }}
+                                    />
+                                  ) : (
+                                    <Autocomplete
+                                      key={readIdx}
+                                      placeholder="OK/NG"
+                                      data={['OK', 'NG']}
+                                      size="xs"
+                                      {...form.getInputProps(`readings.${param.id}_${readIdx}`)}
+                                    />
+                                  )
+                                ))}
+                              </div>
+                            )}
+                          </Table.Td>
+                          <Table.Td className="text-center">
+                            {status === 'PASS' && <Badge color="green" size="xs" variant="filled">OK</Badge>}
+                            {status === 'FAIL' && <Badge color="red" size="xs" variant="filled">NG</Badge>}
+                          </Table.Td>
+                        </Table.Tr>
+                      );
+                    })}
+                  </Table.Tbody>
+                </Table>
+              </div>
 
-              return (
-                <div>
-                  <Group justify="space-between" align="flex-start" mb="md">
-                    <div>
-                      <Text fw={700} size="xl">{param.parameterName}</Text>
-                      <Text size="sm" c="dimmed">Method: {param.methodOfChecking}</Text>
-                      <Text size="sm" c="dimmed">Freq: {param.freqOfInspn || 'N/A'}</Text>
-                    </div>
-                    {status === 'PASS' && <Badge color="green" size="lg" variant="filled">PASS</Badge>}
-                    {status === 'FAIL' && <Badge color="red" size="lg" variant="filled">FAIL</Badge>}
-                  </Group>
+              <div className="p-3 border-t">
+                <Textarea
+                  label="Remarks"
+                  placeholder="Any issues or notes..."
+                  size="sm"
+                  {...form.getInputProps('remarks')}
+                />
+              </div>
 
-                  <Paper withBorder bg="blue.0" p="md" radius="sm" mb="lg" className="border-blue-200">
-                    <Text size="sm" fw={700} c="blue.9">Specification:</Text>
-                    <Text size="lg" fw={600} c="blue.9">
-                      {param.specText || `${param.nominalValue} +${param.upperTolerance}/${param.lowerTolerance}`}
-                    </Text>
-                  </Paper>
-
-                  <div className="flex flex-col gap-4">
-                    {Array.from({ length: count }).map((_, idx) => (
-                      <div key={idx}>
-                        <Text size="sm" fw={600} mb={6}>Reading {idx + 1}</Text>
-                        {isNumeric ? (
-                          <TextInput
-                            placeholder={`Enter reading ${idx + 1}`}
-                            type="number"
-                            inputMode="decimal"
-                            step={stepVal}
-                            size="xl"
-                            {...form.getInputProps(`readings.${param.id}_${idx}`)}
-                            onBlur={(e) => validateLcPrecision(e.target.value, idx)}
-                          />
-                        ) : (
-                          <Autocomplete
-                            placeholder="Select OK/NG"
-                            data={['OK', 'NG']}
-                            size="xl"
-                            {...form.getInputProps(`readings.${param.id}_${idx}`)}
-                          />
-                        )}
-                        {lc && <Text size="xs" c="dimmed" mt={4}>Least Count: {lc}</Text>}
-                      </div>
-                    ))}
-                  </div>
-
-                  <Group justify="space-between" mt="xl" pt="md" className="border-t">
+              <div className="p-3 border-t flex gap-2">
+                <Button
+                  variant="default"
+                  leftSection={<Save size={16} />}
+                  onClick={() => saveDraftMutation.mutate(form.values)}
+                  loading={saveDraftMutation.isPending}
+                  className="flex-1"
+                  size="sm"
+                >
+                  Save Draft
+                </Button>
+                <Button
+                  onClick={() => handleSubmit(form.values)}
+                  loading={submitting}
+                  disabled={submitDisabled}
+                  color={anyFailed ? 'red' : allPassed ? 'green' : 'blue'}
+                  className="flex-1"
+                  size="sm"
+                >
+                  Submit
+                </Button>
+              </div>
+            </Paper>
+          ) : (
+            /* Mobile Single Item (Wizard) View */
+            <>
+              <div className="mb-4">
+                <Group justify="space-between" mb="xs">
+                  <Select
+                    size="xs"
+                    variant="filled"
+                    value={String(activeStep)}
+                    onChange={(val) => val && setActiveStep(Number(val))}
+                    data={filteredParameters.map((_, idx) => ({ value: String(idx), label: `Parameter ${idx + 1} of ${filteredParameters.length}` }))}
+                    styles={{ input: { fontWeight: 600, width: 140 } }}
+                    allowDeselect={false}
+                  />
+                  {/* Feature 2: Jump to Pending button */}
+                  {firstPendingIndex >= 0 && firstPendingIndex !== activeStep && (
                     <Button
                       variant="light"
-                      leftSection={<ArrowLeft size={16} />}
-                      disabled={activeStep === 0}
-                      onClick={() => setActiveStep(prev => prev - 1)}
-                      size="md"
+                      color="orange"
+                      size="xs"
+                      leftSection={<SkipForward size={14} />}
+                      onClick={() => setActiveStep(firstPendingIndex)}
                     >
-                      Back
+                      Jump to Pending
                     </Button>
-                    
-                    {activeStep < parameters.length - 1 ? (
-                      <Button
-                        rightSection={<ArrowRight size={16} />}
-                        onClick={() => setActiveStep(prev => prev + 1)}
-                        size="md"
-                      >
-                        Next
-                      </Button>
-                    ) : (
-                      <Button
-                        color={anyFailed ? 'red' : allPassed ? 'green' : 'blue'}
-                        onClick={() => handleSubmit(form.values)}
-                        loading={submitting}
-                        disabled={!form.values.lotNumber || totalReadingsEntered === 0 || isDuplicate}
-                        leftSection={<CheckCircle2 size={16} />}
-                        size="md"
-                      >
-                        Submit
-                      </Button>
-                    )}
-                  </Group>
-                  <Button
-                    variant="default"
-                    fullWidth
-                    mt="md"
-                    leftSection={<Save size={16} />}
-                    onClick={() => saveDraftMutation.mutate(form.values)}
-                    loading={saveDraftMutation.isPending}
-                    size="md"
-                  >
-                    Save as Draft
-                  </Button>
-                </div>
-              );
-            })()}
-          </Card>
+                  )}
+                </Group>
+                <Progress value={completionPercentage} size="md" color="blue" radius="xl" />
+              </div>
 
-          {activeStep === parameters.length - 1 && (
-            <Card withBorder shadow="sm" radius="md" p="md" mt="md">
-              <Textarea
-                label="Final Remarks"
-                placeholder="Any issues or notes before submitting..."
-                {...form.getInputProps('remarks')}
-                minRows={3}
-                size="md"
-              />
-            </Card>
+              <Card withBorder shadow="sm" radius="md" p="md">
+                {(() => {
+                  const param = filteredParameters[activeStep];
+                  if (!param) return null;
+                  const status = getStatus(param);
+                  const count = getReadingCount(param.freqOfInspn, form.values.intervalName);
+                  const isNumeric = param.controlLimitMin !== null || param.controlLimitMax !== null;
+                  const lc = param.leastCount;
+                  const decimalPlaces = lc && lc > 0 ? Math.round(-Math.log10(lc)) : undefined;
+                  const stepVal = lc && lc > 0 ? String(lc) : '0.001';
+                  const dayWiseRecorded = isDayWiseAlreadyRecorded(param);
+
+                  const validateLcPrecision = (value: string, idx: number) => {
+                    if (!lc || lc <= 0 || !decimalPlaces) return;
+                    const parts = value.split('.');
+                    if (parts.length === 2 && parts[1].length > decimalPlaces) {
+                      const truncated = parseFloat(value).toFixed(decimalPlaces);
+                      form.setFieldValue(`readings.${param.id}_${idx}`, truncated);
+                    }
+                  };
+
+                  return (
+                    <div>
+                      <Group justify="space-between" align="flex-start" mb="md">
+                        <div>
+                          <Text fw={700} size="xl">{param.parameterName}</Text>
+                          <Text size="sm" c="dimmed">Method: {param.methodOfChecking}</Text>
+                          <Text size="sm" c="dimmed">Freq: {param.freqOfInspn || 'N/A'}</Text>
+                        </div>
+                        {status === 'PASS' && <Badge color="green" size="lg" variant="filled">PASS</Badge>}
+                        {status === 'FAIL' && <Badge color="red" size="lg" variant="filled">FAIL</Badge>}
+                      </Group>
+
+                      <Paper withBorder bg="blue.0" p="md" radius="sm" mb="lg" className="border-blue-200">
+                        <Text size="sm" fw={700} c="blue.9">Specification:</Text>
+                        <Text size="lg" fw={600} c="blue.9">
+                          {param.specText || `${param.nominalValue} +${param.upperTolerance}/${param.lowerTolerance}`}
+                        </Text>
+                      </Paper>
+
+                      {dayWiseRecorded ? (
+                        <Alert color="teal" variant="light" icon={<Info size={16} />}>
+                          This parameter has already been recorded in an earlier shift today (Day-wise frequency).
+                        </Alert>
+                      ) : (
+                        <div className="flex flex-col gap-4">
+                          {Array.from({ length: count }).map((_, idx) => (
+                            <div key={idx}>
+                              <Text size="sm" fw={600} mb={6}>Reading {idx + 1}</Text>
+                              {isNumeric ? (
+                                <TextInput
+                                  placeholder={`Enter reading ${idx + 1}`}
+                                  type="number"
+                                  inputMode="decimal"
+                                  step={stepVal}
+                                  size="xl"
+                                  {...form.getInputProps(`readings.${param.id}_${idx}`)}
+                                  onBlur={(e) => validateLcPrecision(e.target.value, idx)}
+                                />
+                              ) : (
+                                <Autocomplete
+                                  placeholder="Select OK/NG"
+                                  data={['OK', 'NG']}
+                                  size="xl"
+                                  {...form.getInputProps(`readings.${param.id}_${idx}`)}
+                                />
+                              )}
+                              {lc && <Text size="xs" c="dimmed" mt={4}>Least Count: {lc}</Text>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <Group justify="space-between" mt="xl" pt="md" className="border-t">
+                        <Button
+                          variant="light"
+                          leftSection={<ArrowLeft size={16} />}
+                          disabled={activeStep === 0}
+                          onClick={() => setActiveStep(prev => prev - 1)}
+                          size="md"
+                        >
+                          Back
+                        </Button>
+                        
+                        {activeStep < filteredParameters.length - 1 ? (
+                          <Button
+                            rightSection={<ArrowRight size={16} />}
+                            onClick={() => setActiveStep(prev => prev + 1)}
+                            size="md"
+                          >
+                            Next
+                          </Button>
+                        ) : (
+                          <Button
+                            color={anyFailed ? 'red' : allPassed ? 'green' : 'blue'}
+                            onClick={() => handleSubmit(form.values)}
+                            loading={submitting}
+                            disabled={submitDisabled}
+                            leftSection={<CheckCircle2 size={16} />}
+                            size="md"
+                          >
+                            Submit
+                          </Button>
+                        )}
+                      </Group>
+                      <Button
+                        variant="default"
+                        fullWidth
+                        mt="md"
+                        leftSection={<Save size={16} />}
+                        onClick={() => saveDraftMutation.mutate(form.values)}
+                        loading={saveDraftMutation.isPending}
+                        size="md"
+                      >
+                        Save as Draft
+                      </Button>
+                    </div>
+                  );
+                })()}
+              </Card>
+
+              {activeStep === filteredParameters.length - 1 && (
+                <Card withBorder shadow="sm" radius="md" p="md" mt="md">
+                  <Textarea
+                    label="Final Remarks"
+                    placeholder="Any issues or notes before submitting..."
+                    {...form.getInputProps('remarks')}
+                    minRows={3}
+                    size="md"
+                  />
+                </Card>
+              )}
+            </>
           )}
         </div>
       </>
@@ -696,7 +989,7 @@ export function InspectionEntry() {
                   <Button
                     onClick={() => handleSubmit(form.values)}
                     loading={submitting}
-                    disabled={!form.values.lotNumber || totalReadingsEntered === 0 || isDuplicate}
+                    disabled={submitDisabled}
                     color={anyFailed ? 'red' : allPassed ? 'green' : 'blue'}
                     className="flex-1 sm:flex-none"
                     size="sm"

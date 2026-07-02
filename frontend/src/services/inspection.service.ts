@@ -1,11 +1,11 @@
 import api from '../lib/axios';
-import { InspectionTransaction } from '../types';
+import { InspectionTransaction, CorrectionEntry } from '../types';
 
 export interface SubmitInspectionDto {
   shiftId: string;
   partId: string;
   operationId: string;
-  lotNumber: string;
+  lotNumber?: string;
   mcNo: string;
   intervalName: string;
   remarks: string | null;
@@ -13,6 +13,14 @@ export interface SubmitInspectionDto {
     parameterId: string;
     observedValue: string;
   }[];
+}
+
+export interface CorrectInspectionDto {
+  corrections: {
+    detailId: string;
+    correctedValue: string;
+  }[];
+  remarks?: string;
 }
 
 export const inspectionService = {
@@ -31,10 +39,12 @@ export const inspectionService = {
     return data;
   },
 
-  getRecent: async (filters?: { status?: string | null; approval?: string | null }): Promise<InspectionTransaction[]> => {
+  getRecent: async (filters?: { status?: string | null; approval?: string | null; date?: string | null; shiftId?: string | null }): Promise<InspectionTransaction[]> => {
     const params: any = {};
     if (filters?.status) params.status = filters.status;
     if (filters?.approval) params.approval = filters.approval;
+    if (filters?.date) params.date = filters.date;
+    if (filters?.shiftId) params.shiftId = filters.shiftId;
     const { data } = await api.get('/inspections/recent', { params });
     return data;
   },
@@ -54,6 +64,16 @@ export const inspectionService = {
     return data;
   },
 
+  correctInspection: async (id: string, payload: CorrectInspectionDto): Promise<InspectionTransaction> => {
+    const { data } = await api.patch(`/inspections/${id}/correct`, payload);
+    return data;
+  },
+
+  getAuditTrail: async (id: string): Promise<CorrectionEntry[]> => {
+    const { data } = await api.get(`/inspections/${id}/audit-trail`);
+    return data;
+  },
+
   getDrafts: async () => {
     const { data } = await api.get('/inspections/drafts');
     return data;
@@ -66,6 +86,11 @@ export const inspectionService = {
 
   deleteDraft: async (id: string) => {
     const { data } = await api.delete(`/inspections/drafts/${id}`);
+    return data;
+  },
+
+  deleteInspection: async (id: string) => {
+    const { data } = await api.delete(`/inspections/${id}`);
     return data;
   },
 };

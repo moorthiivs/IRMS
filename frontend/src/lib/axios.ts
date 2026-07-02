@@ -3,6 +3,7 @@ import { useAuthStore } from '../store/auth-store';
 
 const api = axios.create({
   baseURL: 'https://irms-gzasfnghh6g2b3hu.centralindia-01.azurewebsites.net/api',
+  //baseURL: 'http://localhost:3000/api',
   headers: {
     'Content-Type': 'application/json',
   },
