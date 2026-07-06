@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   Title, Paper, Group, Text, Switch, Stack, Badge,
-  Divider, Card, Alert, Loader, Button, SegmentedControl, useMantineColorScheme, useComputedColorScheme, ActionIcon
+  Divider, Card, Alert, Loader, Button, SegmentedControl, useMantineColorScheme, useComputedColorScheme
 } from '@mantine/core';
 import { Capacitor } from '@capacitor/core';
 import { Settings as SettingsIcon, ShieldAlert, Trash2, Info, Hash, Sun, Moon, Monitor } from 'lucide-react';
@@ -56,7 +56,7 @@ export function Settings() {
 
       const res = await fetch(`${origin}/version.json?t=${Date.now()}`);
       if (!res.ok) return;
-      
+
       const data = await res.json();
       const version = data.version;
       const localVersion = localStorage.getItem('app_version') || 'built-in';
@@ -156,7 +156,7 @@ export function Settings() {
               />
             </Group>
           </Paper>
-          
+
           <Paper withBorder p="md" radius="md" bg="var(--mantine-color-dark-6)" lightHidden>
             <Group justify="space-between" align="center">
               <div>
@@ -293,7 +293,7 @@ export function Settings() {
           </Group>
 
           <Divider mb="md" />
-          
+
           <Paper withBorder p="md" radius="md">
             <Group justify="space-between" align="center">
               <div>
@@ -304,11 +304,11 @@ export function Settings() {
                   {formatVersion(currentVersion)}
                 </Text>
               </div>
-              
+
               {isNative && hasUpdate && (
-                <Button 
-                  size="xs" 
-                  color="blue" 
+                <Button
+                  size="xs"
+                  color="blue"
                   onClick={handleManualUpdate}
                 >
                   Update Available ({formatVersion(remoteVersion)})
