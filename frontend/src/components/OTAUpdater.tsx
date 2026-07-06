@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import { Capacitor } from '@capacitor/core';
 import { notifications } from '@mantine/notifications';
+import { Button } from '@mantine/core';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function OTAUpdater() {
@@ -22,13 +23,19 @@ export function OTAUpdater() {
         setDownloadPercent(Math.round(info.percent));
       });
 
+      const handleForceUpdate = () => {
+        checkForUpdates(true);
+      };
+      window.addEventListener('force-ota-update', handleForceUpdate);
+
       return () => {
         listener.then(l => l.remove());
+        window.removeEventListener('force-ota-update', handleForceUpdate);
       };
     }
   }, []);
 
-  const checkForUpdates = async () => {
+  const checkForUpdates = async (forceShow = false) => {
     try {
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
       let origin = '';
@@ -48,7 +55,7 @@ export function OTAUpdater() {
       const localVersion = localStorage.getItem('app_version') || 'built-in';
       const skippedVersion = localStorage.getItem('skipped_version');
 
-      if (version && version !== localVersion && version !== skippedVersion) {
+      if (version && version !== localVersion && (forceShow || version !== skippedVersion)) {
         setRemoteVersion(version);
         setUpdateAvailable(true);
       }
@@ -159,21 +166,27 @@ export function OTAUpdater() {
               </motion.div>
             )}
 
-            <button
+            <Button
+              size="xl"
+              radius="xl"
               onClick={handleUpdate}
               disabled={updating}
-              className={`w-full max-w-[280px] rounded-xl py-4 px-8 text-white font-bold text-lg tracking-wide shadow-xl shadow-pink-500/30 bg-gradient-to-r from-pink-500 to-orange-400 hover:opacity-90 transition-all duration-300 transform hover:-translate-y-1 ${updating ? 'opacity-90 cursor-not-allowed transform-none hover:transform-none' : 'active:scale-95'}`}
+              className={`w-full max-w-[280px] text-white font-bold text-lg tracking-wide shadow-xl shadow-pink-500/30 bg-gradient-to-r from-pink-500 to-orange-400 hover:opacity-90 transition-all duration-300 transform hover:-translate-y-1 ${updating ? 'opacity-90 cursor-not-allowed transform-none hover:transform-none' : 'active:scale-95'}`}
             >
               {updating ? `UPDATING... ${downloadPercent}%` : 'UPDATE APP'}
-            </button>
+            </Button>
 
             {!updating && (
-              <button
+              <Button
+                size="xl"
+                radius="xl"
+                variant="light"
+                color="gray"
                 onClick={handleSkip}
-                className="mt-4 w-full max-w-[280px] rounded-xl py-4 px-8 text-slate-500 font-bold text-base tracking-wide bg-slate-100 hover:bg-slate-200 transition-all duration-300 active:scale-95"
+                className="mt-4 w-full max-w-[280px] text-slate-500 font-bold text-base tracking-wide hover:bg-slate-200 transition-all duration-300 active:scale-95"
               >
                 NOT NOW
-              </button>
+              </Button>
             )}
           </motion.div>
         </motion.div>

@@ -71,45 +71,7 @@ export function Settings() {
   };
 
   const handleManualUpdate = async () => {
-    if (!remoteVersion) return;
-    setIsUpdating(true);
-    try {
-      notifications.show({
-        id: 'settings-update',
-        loading: true,
-        title: 'Updating...',
-        message: 'Downloading the latest version',
-        autoClose: false,
-        withCloseButton: false,
-      });
-
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-      let origin = '';
-      try {
-        const urlObj = new URL(baseUrl);
-        origin = urlObj.origin;
-      } catch (e) {
-        origin = 'https://irms-gzasfnghh6g2b3hu.centralindia-01.azurewebsites.net';
-      }
-
-      const versionInfo = await CapacitorUpdater.download({
-        url: `${origin}/update.zip`,
-        version: remoteVersion,
-      });
-      
-      localStorage.setItem('app_version', remoteVersion);
-      await CapacitorUpdater.set(versionInfo);
-    } catch (err) {
-      setIsUpdating(false);
-      notifications.update({
-        id: 'settings-update',
-        loading: false,
-        title: 'Update Failed',
-        message: 'Failed to download or apply the update. Please try again later.',
-        color: 'red',
-        autoClose: 5000,
-      });
-    }
+    window.dispatchEvent(new CustomEvent('force-ota-update'));
   };
 
   useEffect(() => {
