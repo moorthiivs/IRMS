@@ -68,6 +68,14 @@ jobs:
           mkdir -p backend/client
           cp -r frontend/dist/* backend/client/
           
+          # Generate version.json for mobile app OTA updates
+          echo "{\"version\": \"${{ github.sha }}\"}" > backend/client/version.json
+          
+          # Create update.zip containing frontend build for OTA updates
+          cd backend/client
+          zip -r update.zip *
+          cd ../..
+          
           # Create deployment zip (Azure Linux App Service uses zip deploy)
           cd backend
           zip -r ../deploy.zip dist client prisma package.json package-lock.json tsconfig.json tsconfig.build.json

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth-store';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { Loader, Center } from '@mantine/core';
+import { OTAUpdater } from '../components/OTAUpdater';
 
 // Lazy-loaded Pages
 const Login = lazy(() => import('../pages/Login').then(m => ({ default: m.Login })));
@@ -15,6 +16,7 @@ const ExcelUpload = lazy(() => import('../pages/ExcelUpload').then(m => ({ defau
 const Settings = lazy(() => import('../pages/Settings').then(m => ({ default: m.Settings })));
 const UserManagement = lazy(() => import('../pages/UserManagement').then(m => ({ default: m.UserManagement })));
 const Drafts = lazy(() => import('../pages/Drafts').then(m => ({ default: m.Drafts })));
+const Customers = lazy(() => import('../pages/Customers').then(m => ({ default: m.Customers })));
 const NotFound = lazy(() => import('../pages/NotFound').then(m => ({ default: m.NotFound })));
 
 // Global Page Loader
@@ -44,6 +46,7 @@ export function AppRoutes() {
 
   return (
     <Suspense fallback={<PageLoader />}>
+      <OTAUpdater />
       <Routes>
         <Route 
           path="/login" 
@@ -60,6 +63,7 @@ export function AppRoutes() {
           {/* Admin Routes */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/master-data" element={<ProtectedRoute requireAdmin><MasterData /></ProtectedRoute>} />
+          <Route path="/customers" element={<ProtectedRoute requireAdmin><Customers /></ProtectedRoute>} />
           <Route path="/upload" element={<ProtectedRoute requireAdmin><ExcelUpload /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute requireAdmin><Settings /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute requireAdmin><UserManagement /></ProtectedRoute>} />

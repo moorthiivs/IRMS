@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   UseGuards,
   UploadedFile,
@@ -28,6 +29,48 @@ import * as fs from 'fs';
 export class MasterDataController {
   constructor(private readonly masterDataService: MasterDataService) {}
 
+  // ── Customer Endpoints ──────────────────────────────────────────
+
+  @Get('customers')
+  async getCustomers() {
+    return this.masterDataService.getCustomers();
+  }
+
+  @Roles(Role.ADMIN)
+  @Post('customers')
+  async createCustomer(@Body() body: { name: string; code?: string }) {
+    return this.masterDataService.createCustomer(body.name, body.code);
+  }
+
+  @Roles(Role.ADMIN)
+  @Put('customers/:id')
+  async updateCustomer(@Param('id') id: string, @Body() body: { name: string; code?: string }) {
+    return this.masterDataService.updateCustomer(id, body.name, body.code);
+  }
+
+  @Roles(Role.ADMIN)
+  @Delete('customers/:id')
+  async deleteCustomer(@Param('id') id: string) {
+    return this.masterDataService.deleteCustomer(id);
+  }
+
+  @Roles(Role.ADMIN)
+  @Patch('parts/:id/customer')
+  async assignPartCustomer(@Param('id') id: string, @Body() body: { customerId: string | null }) {
+    return this.masterDataService.assignPartCustomer(id, body.customerId);
+  }
+
+  // ── Part Endpoints ──────────────────────────────────────────────
+
+  @Roles(Role.ADMIN)
+  @Put('parts/:id')
+  async updatePart(
+    @Param('id') id: string,
+    @Body() body: { partNumber: string; partName: string; customerId?: string | null }
+  ) {
+    return this.masterDataService.updatePart(id, body.partNumber, body.partName, body.customerId);
+  }
+
   @Get('parts')
   async getParts() {
     return this.masterDataService.getParts();
@@ -37,6 +80,19 @@ export class MasterDataController {
   async getPartsWithOperations() {
     return this.masterDataService.getPartsWithOperations();
   }
+
+  // ── Operation Endpoints ──────────────────────────────────────────
+
+  @Roles(Role.ADMIN)
+  @Put('operations/:id')
+  async updateOperation(
+    @Param('id') id: string,
+    @Body() body: { operationNumber: string; operationName: string }
+  ) {
+    return this.masterDataService.updateOperation(id, body.operationNumber, body.operationName);
+  }
+
+  // ── Other Endpoints ─────────────────────────────────────────────
 
   @Get('shifts')
   async getShifts() {

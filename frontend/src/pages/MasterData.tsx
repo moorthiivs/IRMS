@@ -14,14 +14,24 @@ import { notifications } from '@mantine/notifications';
 import { PartWithOperations, InspectionParameter } from '../types';
 import { ExcelUpload } from './ExcelUpload';
 import { TableSkeleton } from '../components/TableSkeleton';
+import { modals } from '@mantine/modals';
 
 export function MasterData() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [expandedParts, setExpandedParts] = useState<Set<string>>(new Set());
+  const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string | null>('parts');
 
-  // Edit modal state
+  // Edit modal states
   const [editPart, setEditPart] = useState<{ partId: string; operationId: string; opNum: string } | null>(null);
+  const [editPartModal, setEditPartModal] = useState<PartWithOperations | null>(null);
+  const [editOpModal, setEditOpModal] = useState<{ id: string, operationNumber: string, operationName: string } | null>(null);
+
+  const { data: customers = [] } = useQuery({
+    queryKey: ['customers'],
+    queryFn: masterDataService.getCustomers,
+  });
 
   const { data: parts = [], isLoading } = useQuery({
     queryKey: ['parts-with-operations'],
@@ -69,10 +79,47 @@ export function MasterData() {
     });
   };
 
+  const updatePartMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string, data: { partNumber: string; partName: string; customerId?: string | null } }) =>
+      masterDataService.updatePart(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parts-with-operations'] });
+      notifications.show({ title: 'Updated', message: 'Part updated successfully.', color: 'green' });
+      setEditPartModal(null);
+    },
+    onError: (err: any) => {
+      notifications.show({
+        title: 'Error',
+        message: err?.response?.data?.message || 'Failed to update part.',
+        color: 'red',
+      });
+    },
+  });
+
+  const updateOpMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string, data: { operationNumber: string; operationName: string } }) =>
+      masterDataService.updateOperation(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parts-with-operations'] });
+      notifications.show({ title: 'Updated', message: 'Operation updated successfully.', color: 'green' });
+      setEditOpModal(null);
+    },
+    onError: (err: any) => {
+      notifications.show({
+        title: 'Error',
+        message: err?.response?.data?.message || 'Failed to update operation.',
+        color: 'red',
+      });
+    },
+  });
+
   const filteredParts = parts.filter(
-    (p) =>
-      p.partNumber.toLowerCase().includes(search.toLowerCase()) ||
-      p.partName.toLowerCase().includes(search.toLowerCase()),
+    (p) => {
+      const matchesSearch = p.partNumber.toLowerCase().includes(search.toLowerCase()) ||
+                            p.partName.toLowerCase().includes(search.toLowerCase());
+      const matchesCustomer = selectedCustomer ? p.customerId === selectedCustomer : true;
+      return matchesSearch && matchesCustomer;
+    }
   );
 
   return (
@@ -81,7 +128,7 @@ export function MasterData() {
         <Title order={2}>Master Data</Title>
       </Group>
 
-      <Tabs defaultValue="parts">
+      <Tabs value={activeTab} onChange={setActiveTab}>
         <Tabs.List mb="lg">
           <Tabs.Tab value="parts" leftSection={<Database size={16} />}>
             Parts & Parameters
@@ -93,11 +140,21 @@ export function MasterData() {
 
         <Tabs.Panel value="parts">
           <Group justify="flex-end" mb="md">
+            <Select
+              placeholder="Filter by Customer"
+              data={customers.map((c: any) => ({ value: c.id, label: c.name }))}
+              value={selectedCustomer}
+              onChange={setSelectedCustomer}
+              clearable
+              searchable
+              style={{ width: 250 }}
+            />
             <TextInput
               placeholder="Search parts..."
               leftSection={<Search size={16} />}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              style={{ width: 250 }}
             />
           </Group>
 
@@ -112,6 +169,7 @@ export function MasterData() {
                       <Table.Th style={{ width: 40 }}></Table.Th>
                       <Table.Th>Part Number</Table.Th>
                       <Table.Th>Part Name</Table.Th>
+                      <Table.Th>Customer</Table.Th>
                       <Table.Th>Operations</Table.Th>
                       <Table.Th style={{ minWidth: 60 }}>Actions</Table.Th>
                     </Table.Tr>
@@ -119,7 +177,7 @@ export function MasterData() {
                   <Table.Tbody>
                     {filteredParts.length === 0 ? (
                       <Table.Tr>
-                        <Table.Td colSpan={5} style={{ textAlign: 'center', padding: 32, color: '#868e96' }}>
+                        <Table.Td colSpan={6} style={{ textAlign: 'center', padding: 32, color: '#868e96' }}>
                           No parts found. Upload Excel to populate.
                         </Table.Td>
                       </Table.Tr>
@@ -130,18 +188,40 @@ export function MasterData() {
                           part={part}
                           expanded={expandedParts.has(part.id)}
                           onToggle={() => toggleExpand(part.id)}
+                          onEditPart={() => setEditPartModal(part)}
                           onDeletePart={() => {
-                            if (confirm(`Delete part "${part.partNumber}" and all its operations/parameters?`)) {
-                              deletePartMutation.mutate(part.id);
-                            }
+                            modals.openConfirmModal({
+                              title: 'Delete Part',
+                              centered: true,
+                              children: (
+                                <Text size="sm">
+                                  Are you sure you want to delete part <strong>{part.partNumber}</strong> and all its operations and parameters? This action cannot be undone.
+                                </Text>
+                              ),
+                              labels: { confirm: 'Delete part', cancel: "Cancel" },
+                              confirmProps: { color: 'red' },
+                              onConfirm: () => deletePartMutation.mutate(part.id),
+                            });
                           }}
                           onDeleteOp={(operationId) => {
-                            if (confirm(`Remove this operation from "${part.partNumber}"?`)) {
-                              deleteOpMutation.mutate({ partId: part.id, operationId });
-                            }
+                            modals.openConfirmModal({
+                              title: 'Remove Operation',
+                              centered: true,
+                              children: (
+                                <Text size="sm">
+                                  Are you sure you want to remove this operation from <strong>{part.partNumber}</strong>?
+                                </Text>
+                              ),
+                              labels: { confirm: 'Remove operation', cancel: "Cancel" },
+                              confirmProps: { color: 'red' },
+                              onConfirm: () => deleteOpMutation.mutate({ partId: part.id, operationId }),
+                            });
                           }}
                           onEditOp={(operationId, opNum) => {
                             setEditPart({ partId: part.id, operationId, opNum });
+                          }}
+                          onEditOpDetails={(op) => {
+                            setEditOpModal({ id: op.id, operationNumber: op.operationNumber, operationName: op.operationName });
                           }}
                         />
                       ))
@@ -154,9 +234,28 @@ export function MasterData() {
         </Tabs.Panel>
 
         <Tabs.Panel value="upload">
-          <ExcelUpload />
+          <ExcelUpload onUploadSuccess={() => setActiveTab('parts')} />
         </Tabs.Panel>
       </Tabs>
+
+      {/* Part Edit Modal */}
+      <Modal
+        opened={!!editPartModal}
+        onClose={() => setEditPartModal(null)}
+        title="Edit Part"
+        centered
+        overlayProps={{ backgroundOpacity: 0.55, blur: 0 }}
+      >
+        {editPartModal && (
+          <EditPartForm
+            part={editPartModal}
+            customers={customers}
+            onCancel={() => setEditPartModal(null)}
+            onSubmit={(data) => updatePartMutation.mutate({ id: editPartModal.id, data })}
+            isLoading={updatePartMutation.isPending}
+          />
+        )}
+      </Modal>
 
       {/* Parameter Edit Modal */}
       <Modal
@@ -165,12 +264,31 @@ export function MasterData() {
         title={`Edit Parameters — Operation ${editPart?.opNum}`}
         fullScreen
         transitionProps={{ transition: 'fade', duration: 200 }}
+        overlayProps={{ backgroundOpacity: 0.55, blur: 0 }}
       >
         {editPart && (
           <ParameterEditor
             partId={editPart.partId}
             operationId={editPart.operationId}
             onClose={() => setEditPart(null)}
+          />
+        )}
+      </Modal>
+
+      {/* Operation Edit Modal */}
+      <Modal
+        opened={!!editOpModal}
+        onClose={() => setEditOpModal(null)}
+        title="Edit Operation"
+        centered
+        overlayProps={{ backgroundOpacity: 0.55, blur: 0 }}
+      >
+        {editOpModal && (
+          <EditOpForm
+            op={editOpModal}
+            onCancel={() => setEditOpModal(null)}
+            onSubmit={(data) => updateOpMutation.mutate({ id: editOpModal.id, data })}
+            isLoading={updateOpMutation.isPending}
           />
         )}
       </Modal>
@@ -183,16 +301,20 @@ function PartRow({
   part,
   expanded,
   onToggle,
+  onEditPart,
   onDeletePart,
   onDeleteOp,
   onEditOp,
+  onEditOpDetails,
 }: {
   part: PartWithOperations;
   expanded: boolean;
   onToggle: () => void;
+  onEditPart: () => void;
   onDeletePart: () => void;
   onDeleteOp: (operationId: string) => void;
   onEditOp: (operationId: string, opNum: string) => void;
+  onEditOpDetails: (op: any) => void;
 }) {
   return (
     <>
@@ -205,25 +327,43 @@ function PartRow({
         </Table.Td>
         <Table.Td>{part.partName}</Table.Td>
         <Table.Td>
+          {part.customerName ? (
+            <Badge variant="light" color="gray">{part.customerName}</Badge>
+          ) : (
+            <Text size="xs" c="dimmed">—</Text>
+          )}
+        </Table.Td>
+        <Table.Td>
           <Badge variant="light" color="blue">
             {part.operations.length} operation(s)
           </Badge>
         </Table.Td>
         <Table.Td>
-          <Tooltip label="Delete Part">
-            <ActionIcon
-              variant="subtle"
-              color="red"
-              onClick={(e) => { e.stopPropagation(); onDeletePart(); }}
-            >
-              <Trash2 size={16} />
-            </ActionIcon>
-          </Tooltip>
+          <Group gap="xs" wrap="nowrap">
+            <Tooltip label="Edit Part">
+              <ActionIcon
+                variant="subtle"
+                color="blue"
+                onClick={(e) => { e.stopPropagation(); onEditPart(); }}
+              >
+                <Edit size={16} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Delete Part">
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                onClick={(e) => { e.stopPropagation(); onDeletePart(); }}
+              >
+                <Trash2 size={16} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
         </Table.Td>
       </Table.Tr>
       {expanded && (
         <Table.Tr>
-          <Table.Td colSpan={5} style={{ padding: 0 }}>
+          <Table.Td colSpan={6} style={{ padding: 0 }}>
             <Collapse in={expanded}>
               <div style={{ padding: '8px 16px 16px 48px', background: '#f8f9fa' }}>
                 {part.operations.length === 0 ? (
@@ -238,7 +378,7 @@ function PartRow({
                           <Table.Th>Operation No</Table.Th>
                           <Table.Th>Operation Name</Table.Th>
                           <Table.Th>Parameters</Table.Th>
-                          <Table.Th style={{ minWidth: 100 }}>Actions</Table.Th>
+                          <Table.Th style={{ minWidth: 150 }}>Actions</Table.Th>
                         </Table.Tr>
                       </Table.Thead>
                       <Table.Tbody>
@@ -254,22 +394,19 @@ function PartRow({
                               </Badge>
                             </Table.Td>
                             <Table.Td>
-                              <Group gap={4} wrap="nowrap">
-                                <Tooltip label="Edit Parameters">
-                                  <ActionIcon
-                                    variant="subtle"
-                                    color="blue"
-                                    onClick={() => onEditOp(op.id, op.operationNumber)}
-                                  >
+                              <Group gap="xs" wrap="nowrap">
+                                <Tooltip label="Edit Operation Details">
+                                  <ActionIcon variant="light" color="blue" onClick={() => onEditOpDetails(op)}>
                                     <Edit size={16} />
                                   </ActionIcon>
                                 </Tooltip>
-                                <Tooltip label="Remove Operation">
-                                  <ActionIcon
-                                    variant="subtle"
-                                    color="red"
-                                    onClick={() => onDeleteOp(op.id)}
-                                  >
+                                <Tooltip label="Edit Parameters">
+                                  <ActionIcon variant="light" color="teal" onClick={() => onEditOp(op.id, op.operationNumber)}>
+                                    <Database size={16} />
+                                  </ActionIcon>
+                                </Tooltip>
+                                <Tooltip label="Delete Operation">
+                                  <ActionIcon variant="light" color="red" onClick={() => onDeleteOp(op.id)}>
                                     <Trash2 size={16} />
                                   </ActionIcon>
                                 </Tooltip>
@@ -387,9 +524,18 @@ function ParameterEditor({
       setDirty(true);
     } else {
       // Remove from backend
-      if (confirm('Are you sure you want to delete this parameter permanently?')) {
-        deleteMutation.mutate(id);
-      }
+      modals.openConfirmModal({
+        title: 'Delete Parameter',
+        centered: true,
+        children: (
+          <Text size="sm">
+            Are you sure you want to delete this parameter permanently? This action cannot be undone.
+          </Text>
+        ),
+        labels: { confirm: 'Delete parameter', cancel: "Cancel" },
+        confirmProps: { color: 'red' },
+        onConfirm: () => deleteMutation.mutate(id),
+      });
     }
   };
 
@@ -561,5 +707,114 @@ function ParameterEditor({
         </Table>
       </div>
     </div>
+  );
+}
+
+// Edit Part Form Component
+function EditPartForm({
+  part,
+  customers,
+  onCancel,
+  onSubmit,
+  isLoading,
+}: {
+  part: PartWithOperations;
+  customers: any[];
+  onCancel: () => void;
+  onSubmit: (data: { partNumber: string; partName: string; customerId: string | null }) => void;
+  isLoading: boolean;
+}) {
+  const [partNumber, setPartNumber] = useState(part.partNumber);
+  const [partName, setPartName] = useState(part.partName);
+  const [customerId, setCustomerId] = useState<string | null>(part.customerId || null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit({ partNumber, partName, customerId });
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <TextInput
+        label="Part Number"
+        value={partNumber}
+        onChange={(e) => setPartNumber(e.target.value)}
+        required
+        mb="md"
+      />
+      <TextInput
+        label="Part Name"
+        value={partName}
+        onChange={(e) => setPartName(e.target.value)}
+        required
+        mb="md"
+      />
+      <Select
+        label="Customer"
+        placeholder="Unassigned"
+        data={customers.map((c) => ({ value: c.id, label: c.name }))}
+        value={customerId}
+        onChange={setCustomerId}
+        clearable
+        searchable
+        mb="xl"
+      />
+      <Group justify="flex-end">
+        <Button variant="default" onClick={onCancel} disabled={isLoading}>
+          Cancel
+        </Button>
+        <Button type="submit" loading={isLoading}>
+          Save Changes
+        </Button>
+      </Group>
+    </form>
+  );
+}
+
+// Edit Operation Form Component
+function EditOpForm({
+  op,
+  onCancel,
+  onSubmit,
+  isLoading,
+}: {
+  op: { operationNumber: string; operationName: string };
+  onCancel: () => void;
+  onSubmit: (data: { operationNumber: string; operationName: string }) => void;
+  isLoading: boolean;
+}) {
+  const [operationNumber, setOperationNumber] = useState(op.operationNumber);
+  const [operationName, setOperationName] = useState(op.operationName);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit({ operationNumber, operationName });
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <TextInput
+        label="Operation Number"
+        value={operationNumber}
+        onChange={(e) => setOperationNumber(e.target.value)}
+        required
+        mb="md"
+      />
+      <TextInput
+        label="Operation Name"
+        value={operationName}
+        onChange={(e) => setOperationName(e.target.value)}
+        required
+        mb="xl"
+      />
+      <Group justify="flex-end">
+        <Button variant="default" onClick={onCancel} disabled={isLoading}>
+          Cancel
+        </Button>
+        <Button type="submit" loading={isLoading}>
+          Save Changes
+        </Button>
+      </Group>
+    </form>
   );
 }

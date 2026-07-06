@@ -52,10 +52,21 @@ model Shift {
   transactions InspectionTransaction[]
 }
 
+model Customer {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  code      String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  parts     Part[]
+}
+
 model Part {
   id           String        @id @default(uuid())
   partNumber   String        @unique // e.g., "PART-9904-X"
   partName     String
+  customerId   String?
+  customer     Customer?     @relation(fields: [customerId], references: [id])
   operations   PartOperation[]
   parameters   InspectionParameter[]
   transactions InspectionTransaction[]

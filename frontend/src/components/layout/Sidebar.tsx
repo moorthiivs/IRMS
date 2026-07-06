@@ -7,7 +7,8 @@ import {
   Database, 
   Settings,
   Users,
-  Save
+  Save,
+  Building2
 } from 'lucide-react';
 import { useAuthStore } from '../../store/auth-store';
 
@@ -26,6 +27,7 @@ export function Sidebar({ onClose }: SidebarProps) {
     { icon: Save, label: 'Drafts', to: '/drafts' },
     { icon: FileText, label: 'Reports', to: '/reports' },
     ...(isAdmin ? [
+      { icon: Building2, label: 'Customers', to: '/customers' },
       { icon: Database, label: 'Master Data', to: '/master-data' },
       { icon: Users, label: 'Users', to: '/users' },
       { icon: Settings, label: 'Settings', to: '/settings' },

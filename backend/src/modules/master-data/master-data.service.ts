@@ -7,9 +7,83 @@ import { UploadStatus } from '@prisma/client';
 export class MasterDataService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // ── Customer CRUD ──────────────────────────────────────────────
+
+  async getCustomers() {
+    return this.prisma.customer.findMany({
+      orderBy: { name: 'asc' },
+      include: {
+        _count: { select: { parts: true } },
+      },
+    });
+  }
+
+  async createCustomer(name: string, code?: string) {
+    const existing = await this.prisma.customer.findUnique({ where: { name } });
+    if (existing) throw new BadRequestException(`Customer "${name}" already exists.`);
+    return this.prisma.customer.create({ data: { name, code: code || null } });
+  }
+
+  async updateCustomer(id: string, name: string, code?: string) {
+    return this.prisma.customer.update({
+      where: { id },
+      data: { name, code: code || null },
+    });
+  }
+
+  async deleteCustomer(id: string) {
+    // Unlink parts first
+    await this.prisma.part.updateMany({ where: { customerId: id }, data: { customerId: null } });
+    await this.prisma.customer.delete({ where: { id } });
+    return { message: 'Customer deleted successfully.' };
+  }
+
+  async assignPartCustomer(partId: string, customerId: string | null) {
+    return this.prisma.part.update({
+      where: { id: partId },
+      data: { customerId },
+      include: { customer: true },
+    });
+  }
+
+  async updateOperation(id: string, operationNumber: string, operationName: string) {
+    const existing = await this.prisma.operation.findUnique({ where: { operationNumber } });
+    if (existing && existing.id !== id) {
+      throw new BadRequestException(`Operation number ${operationNumber} is already in use.`);
+    }
+
+    return this.prisma.operation.update({
+      where: { id },
+      data: { operationNumber, operationName },
+    });
+  }
+
+  async updatePart(id: string, partNumber: string, partName: string, customerId?: string | null) {
+    // Check if the new partNumber already exists on another part
+    const existing = await this.prisma.part.findUnique({ where: { partNumber } });
+    if (existing && existing.id !== id) {
+      throw new BadRequestException(`Part number ${partNumber} is already in use.`);
+    }
+
+    return this.prisma.part.update({
+      where: { id },
+      data: {
+        partNumber,
+        partName,
+        customerId,
+      },
+      include: {
+        customer: true,
+      },
+    });
+  }
+
+  // ── Parts ─────────────────────────────────────────────────────
+
   async getParts() {
     return this.prisma.part.findMany({
       orderBy: { partNumber: 'asc' },
+      include: { customer: true },
     });
   }
 
@@ -17,6 +91,7 @@ export class MasterDataService {
     const parts = await this.prisma.part.findMany({
       orderBy: { partNumber: 'asc' },
       include: {
+        customer: true,
         operations: {
           include: {
             operation: true,
@@ -32,6 +107,8 @@ export class MasterDataService {
       id: part.id,
       partNumber: part.partNumber,
       partName: part.partName,
+      customerId: part.customerId,
+      customerName: part.customer?.name || null,
       operations: part.operations.map((po) => ({
         id: po.operation.id,
         operationNumber: po.operation.operationNumber,
@@ -211,6 +288,7 @@ export class MasterDataService {
       const methodIdx = headers.indexOf('Method of Checking');
       const freqIdx = headers.indexOf('Freq. of Inspn.');
       const lcIdx = headers.indexOf('Lc');
+      const customerIdx = headers.indexOf('Customer');
 
       const previewRows: any[] = [];
       const errors: string[] = [];
@@ -291,6 +369,7 @@ export class MasterDataService {
           partName: partName,
           operationNumber: operationNo,
           parameterName: parameterName,
+          customerName: customerIdx >= 0 && row[customerIdx] ? String(row[customerIdx]).trim() : null,
           sequence: row[snoIdx] ? parseInt(row[snoIdx], 10) : i,
           class: row[classIdx] ? String(row[classIdx]).trim() : null,
           specText: specText,
@@ -340,11 +419,22 @@ export class MasterDataService {
     let importedCount = 0;
     try {
       for (const row of rows) {
+        // 0. Create/Find Customer if present
+        let customerId: string | null = null;
+        if (row.customerName) {
+          const customer = await this.prisma.customer.upsert({
+            where: { name: row.customerName },
+            update: {},
+            create: { name: row.customerName },
+          });
+          customerId = customer.id;
+        }
+
         // 1. Create/Find Part
         const part = await this.prisma.part.upsert({
           where: { partNumber: row.partNumber },
-          update: { partName: row.partName },
-          create: { partNumber: row.partNumber, partName: row.partName },
+          update: { partName: row.partName, ...(customerId ? { customerId } : {}) },
+          create: { partNumber: row.partNumber, partName: row.partName, customerId },
         });
 
         // 2. Create/Find Operation

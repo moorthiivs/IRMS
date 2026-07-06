@@ -6,7 +6,7 @@ import { notifications } from '@mantine/notifications';
 import { UploadCloud, Download, Check, AlertCircle, FileSpreadsheet, X, Trash2 } from 'lucide-react';
 import { masterDataService } from '../services/master-data.service';
 
-export function ExcelUpload() {
+export function ExcelUpload({ onUploadSuccess }: { onUploadSuccess?: () => void }) {
   const queryClient = useQueryClient();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewData, setPreviewData] = useState<any>(null);
@@ -49,6 +49,8 @@ export function ExcelUpload() {
       queryClient.invalidateQueries({ queryKey: ['parts'] });
       queryClient.invalidateQueries({ queryKey: ['operations'] });
       queryClient.invalidateQueries({ queryKey: ['parameters'] });
+      queryClient.invalidateQueries({ queryKey: ['parts-with-operations'] });
+      onUploadSuccess?.();
     },
     onError: (err: any) => {
       notifications.show({

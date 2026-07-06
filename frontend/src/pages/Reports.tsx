@@ -6,7 +6,7 @@ import {
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Eye, Printer, FileText, Search, LayoutGrid, CheckCircle, FileCheck, Wrench, History, ArrowRight, Trash2 } from 'lucide-react';
+import { Eye, Printer, FileText, Search, LayoutGrid, CheckCircle, FileCheck, Wrench, History, ArrowRight, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { inspectionService } from '../services/inspection.service';
 import { masterDataService } from '../services/master-data.service';
@@ -78,6 +78,8 @@ export function Reports() {
   // History Tab filter states
   const [historyDate, setHistoryDate] = useState<Date | null>(null);
   const [historyShift, setHistoryShift] = useState<string | null>(null);
+  const [historyPart, setHistoryPart] = useState<string | null>(null);
+  const [historyOp, setHistoryOp] = useState<string | null>(null);
 
   // Report filter states
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
@@ -106,7 +108,7 @@ export function Reports() {
 
   // 1. Transaction History Query
   const { data: recent = [], isLoading: isRecentLoading } = useQuery({
-    queryKey: ['recent-inspections', filterStatus, filterApproval, historyDate, historyShift],
+    queryKey: ['recent-inspections', filterStatus, filterApproval, historyDate, historyShift, historyPart, historyOp],
     queryFn: () => {
       const formattedDate = historyDate ? 
         `${historyDate.getFullYear()}-${String(historyDate.getMonth() + 1).padStart(2, '0')}-${String(historyDate.getDate()).padStart(2, '0')}` 
@@ -115,7 +117,9 @@ export function Reports() {
         status: filterStatus, 
         approval: filterApproval,
         date: formattedDate,
-        shiftId: historyShift || undefined
+        shiftId: historyShift || undefined,
+        partId: historyPart || undefined,
+        operationId: historyOp || undefined
       });
     },
   });
@@ -135,6 +139,12 @@ export function Reports() {
     queryKey: ['operations', selectedPart],
     queryFn: () => masterDataService.getOperationsByPart(selectedPart!),
     enabled: !!selectedPart
+  });
+
+  const { data: historyOperations = [] } = useQuery({
+    queryKey: ['operations', historyPart],
+    queryFn: () => masterDataService.getOperationsByPart(historyPart!),
+    enabled: !!historyPart
   });
 
   // 3. Daily report transactions query
@@ -296,9 +306,9 @@ export function Reports() {
     if (unapproved.length === 0) return;
 
     modals.openConfirmModal({
-      title: 'Bulk Approve Shift',
+      title: 'Bulk Approve Group',
       centered: true,
-      children: <Text size="sm">Are you sure you want to approve {unapproved.length} pending inspection(s) for this shift?</Text>,
+      children: <Text size="sm">Are you sure you want to approve {unapproved.length} pending inspection(s) for this group?</Text>,
       labels: { confirm: 'Approve All', cancel: 'Cancel' },
       confirmProps: { color: 'green' },
       onConfirm: async () => {
@@ -592,8 +602,9 @@ export function Reports() {
     const groups: Record<string, any[]> = {};
     recent.forEach((tx: any) => {
       const dateStr = new Date(tx.inspectionTimestamp).toLocaleDateString();
-      const shiftName = tx.shift?.name || 'Unknown Shift';
-      const key = `${dateStr} - ${shiftName}`;
+      const partNo = tx.part?.partNumber || 'Unknown Part';
+      const opNo = tx.operation?.operationNumber || 'Unknown Op';
+      const key = `${partNo} / ${opNo} - ${dateStr}`;
       if (!groups[key]) groups[key] = [];
       groups[key].push(tx);
     });
@@ -715,7 +726,26 @@ export function Reports() {
                   value={historyShift}
                   onChange={setHistoryShift}
                   clearable
-                  style={{ width: 150 }}
+                  style={{ width: 120 }}
+                />
+                <Select
+                  placeholder="Select Part"
+                  size="xs"
+                  data={parts.map(p => ({ value: p.id, label: p.partNumber }))}
+                  value={historyPart}
+                  onChange={(v) => { setHistoryPart(v); setHistoryOp(null); }}
+                  clearable
+                  style={{ width: 140 }}
+                />
+                <Select
+                  placeholder="Select Operation"
+                  size="xs"
+                  data={historyOperations.map(o => ({ value: o.id, label: o.operationNumber }))}
+                  value={historyOp}
+                  onChange={setHistoryOp}
+                  clearable
+                  disabled={!historyPart}
+                  style={{ width: 140 }}
                 />
                 {filterStatus && (
                   <Badge color={filterStatus === 'PASSED' ? 'green' : 'red'} variant="filled">
@@ -741,6 +771,8 @@ export function Reports() {
                     setSearchParams({});
                     setHistoryDate(null);
                     setHistoryShift(null);
+                    setHistoryPart(null);
+                    setHistoryOp(null);
                   }}
                 >
                   Clear Filters
@@ -776,36 +808,48 @@ export function Reports() {
                   {Object.entries(groupedRecent).map(([groupKey, groupTxs]) => (
                     <React.Fragment key={groupKey}>
                       <Table.Tr 
-                        className={`font-bold cursor-pointer transition-colors ${groupTxs.some((tx: any) => tx.status === 'REJECTED') ? 'bg-orange-100/70 hover:bg-orange-200/80 text-orange-900' : 'bg-gray-100/80 hover:bg-gray-200'}`}
+                        className={`font-bold cursor-pointer transition-colors ${groupTxs.some((tx: any) => tx.status === 'REJECTED') ? 'bg-orange-50 hover:bg-orange-100 text-orange-900 border-b border-orange-200' : 'bg-white hover:bg-gray-50 border-b border-gray-200 shadow-sm'}`}
                         onClick={() => toggleGroup(groupKey)}
                       >
-                        <Table.Td colSpan={8}>
+                        <Table.Td colSpan={8} className="py-3">
                           <Group justify="space-between">
-                            <Text size="sm" fw={700} className="text-gray-800">
-                              {expandedGroups[groupKey] ? '▼' : '▶'} {groupKey} ({groupTxs.length} submissions)
-                            </Text>
-                            {groupTxs.some((tx: any) => tx.status === 'REJECTED') ? (
-                              <Badge color="orange" variant="filled" size="sm">
-                                Take Action Required
-                              </Badge>
-                            ) : isAdmin && groupTxs.some((tx: any) => tx.status === 'PASSED' && !tx.approvedById) ? (
-                              <Button
-                                size="compact-xs"
-                                color="green"
-                                onClick={(e) => { e.stopPropagation(); handleBulkApprove(groupTxs); }}
-                              >
-                                Bulk Approve Shift
-                              </Button>
-                            ) : null}
+                            <Group gap="sm">
+                              <ThemeIcon variant="light" color={expandedGroups[groupKey] ? "blue" : "gray"} size="sm" radius="xl">
+                                {expandedGroups[groupKey] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                              </ThemeIcon>
+                              <Text size="sm" fw={700} className="text-gray-800">
+                                {groupKey}
+                              </Text>
+                              <Badge size="xs" variant="filled" color="gray" radius="sm">{groupTxs.length} item{groupTxs.length > 1 ? 's' : ''}</Badge>
+                            </Group>
+                            <Group>
+                              {groupTxs.some((tx: any) => tx.status === 'REJECTED') ? (
+                                <Badge color="orange" variant="filled" size="sm">
+                                  Take Action Required
+                                </Badge>
+                              ) : isAdmin && groupTxs.some((tx: any) => tx.status === 'PASSED' && !tx.approvedById) ? (
+                                <Button
+                                  size="compact-xs"
+                                  color="green"
+                                  onClick={(e) => { e.stopPropagation(); handleBulkApprove(groupTxs); }}
+                                >
+                                  Bulk Approve
+                                </Button>
+                              ) : null}
+                            </Group>
                           </Group>
                         </Table.Td>
                       </Table.Tr>
                       {expandedGroups[groupKey] && groupTxs.map((item: any) => (
                         <Table.Tr 
                           key={item.id} 
-                          className={selectedIds.includes(item.id) ? 'bg-red-50/40' : item.status === 'REJECTED' ? 'bg-orange-50/50' : ''}
+                          className={
+                            selectedIds.includes(item.id) ? 'bg-red-50/40' 
+                            : item.status === 'REJECTED' ? 'bg-orange-50/40' 
+                            : 'bg-slate-50/50 hover:bg-slate-100/80 transition-colors'
+                          }
                         >
-                          <Table.Td>
+                          <Table.Td className="border-l-[3px] border-l-blue-400 pl-4">
                             <Checkbox
                               checked={selectedIds.includes(item.id)}
                               onChange={(e) => {
@@ -817,13 +861,27 @@ export function Reports() {
                               }}
                             />
                           </Table.Td>
-                          <Table.Td>{new Date(item.inspectionTimestamp).toLocaleString()}</Table.Td>
-                          <Table.Td>{item.part?.partNumber} / {item.operation?.operationNumber}</Table.Td>
-                          <Table.Td>{item.shift?.name}</Table.Td>
-                          <Table.Td>{item.lotNumber}</Table.Td>
-                          <Table.Td>{item.inspector?.name}</Table.Td>
                           <Table.Td>
-                            <Badge color={item.status === 'PASSED' ? 'green' : 'red'}>
+                            <Text size="sm" fw={500}>{new Date(item.inspectionTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <Text size="xs" c="dimmed">{item.part?.partNumber} / {item.operation?.operationNumber}</Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <Badge variant="light" color="gray" size="sm">{item.shift?.name}</Badge>
+                          </Table.Td>
+                          <Table.Td>
+                            <Text size="sm" fw={500}>{item.lotNumber || '-'}</Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <Text size="sm" c="dimmed">{item.inspector?.name}</Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <Badge 
+                              color={item.status === 'PASSED' ? 'teal' : 'red'} 
+                              variant={item.status === 'PASSED' ? 'light' : 'filled'}
+                              size="sm"
+                            >
                               {item.status}
                             </Badge>
                           </Table.Td>

@@ -39,12 +39,14 @@ export const inspectionService = {
     return data;
   },
 
-  getRecent: async (filters?: { status?: string | null; approval?: string | null; date?: string | null; shiftId?: string | null }): Promise<InspectionTransaction[]> => {
+  getRecent: async (filters?: { status?: string | null; approval?: string | null; date?: string | null; shiftId?: string | null; partId?: string | null; operationId?: string | null }): Promise<InspectionTransaction[]> => {
     const params: any = {};
     if (filters?.status) params.status = filters.status;
     if (filters?.approval) params.approval = filters.approval;
     if (filters?.date) params.date = filters.date;
     if (filters?.shiftId) params.shiftId = filters.shiftId;
+    if (filters?.partId) params.partId = filters.partId;
+    if (filters?.operationId) params.operationId = filters.operationId;
     const { data } = await api.get('/inspections/recent', { params });
     return data;
   },
@@ -91,6 +93,11 @@ export const inspectionService = {
 
   deleteInspection: async (id: string) => {
     const { data } = await api.delete(`/inspections/${id}`);
+    return data;
+  },
+
+  getTrends: async (params: { partId: string; operationId: string; days?: number; startDate?: string; endDate?: string }) => {
+    const { data } = await api.get('/inspections/trends', { params });
     return data;
   },
 };

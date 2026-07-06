@@ -15,10 +15,21 @@ export interface Shift {
   endTime: string;
 }
 
+export interface Customer {
+  id: string;
+  name: string;
+  code: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  _count?: { parts: number };
+}
+
 export interface Part {
   id: string;
   partNumber: string;
   partName: string;
+  customerId?: string | null;
+  customer?: Customer | null;
 }
 
 export interface Operation {
@@ -35,6 +46,8 @@ export interface PartWithOperations {
   id: string;
   partNumber: string;
   partName: string;
+  customerId?: string | null;
+  customerName?: string | null;
   operations: OperationWithCount[];
 }
 

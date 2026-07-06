@@ -13,6 +13,7 @@
     "@capacitor/android": "^8.4.1",
     "@capacitor/core": "^8.4.1",
     "@capacitor/ios": "^8.4.1",
+    "@capgo/capacitor-updater": "^8.50.2",
     "@hookform/resolvers": "^3.9.0",
     "@mantine/core": "^7.15.0",
     "@mantine/dates": "^7.15.0",

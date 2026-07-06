@@ -1,9 +1,43 @@
 import api from '../lib/axios';
-import { Part, Operation, InspectionParameter, Shift, UploadHistory, PartWithOperations } from '../types';
+import { Part, Operation, InspectionParameter, Shift, UploadHistory, PartWithOperations, Customer } from '../types';
 
 export const masterDataService = {
+  // ── Customer Methods ─────────────────────────────────────────
+
+  getCustomers: async (): Promise<Customer[]> => {
+    const { data } = await api.get('/master-data/customers');
+    return data;
+  },
+
+  createCustomer: async (name: string, code?: string): Promise<Customer> => {
+    const { data } = await api.post('/master-data/customers', { name, code });
+    return data;
+  },
+
+  updateCustomer: async (id: string, name: string, code?: string): Promise<Customer> => {
+    const { data } = await api.put(`/master-data/customers/${id}`, { name, code });
+    return data;
+  },
+
+  deleteCustomer: async (id: string): Promise<{ message: string }> => {
+    const { data } = await api.delete(`/master-data/customers/${id}`);
+    return data;
+  },
+
+  assignPartCustomer: async (partId: string, customerId: string | null): Promise<Part> => {
+    const { data } = await api.patch(`/master-data/parts/${partId}/customer`, { customerId });
+    return data;
+  },
+
+  // ── Part Methods ─────────────────────────────────────────────
+
   getParts: async (): Promise<Part[]> => {
     const { data } = await api.get('/master-data/parts');
+    return data;
+  },
+
+  updatePart: async (id: string, partData: { partNumber: string; partName: string; customerId?: string | null }): Promise<Part> => {
+    const { data } = await api.put(`/master-data/parts/${id}`, partData);
     return data;
   },
 
@@ -19,6 +53,11 @@ export const masterDataService = {
 
   getOperationsByPart: async (partId: string): Promise<Operation[]> => {
     const { data } = await api.get(`/master-data/parts/${partId}/operations`);
+    return data;
+  },
+
+  updateOperation: async (id: string, operationData: { operationNumber: string; operationName: string }): Promise<Operation> => {
+    const { data } = await api.put(`/master-data/operations/${id}`, operationData);
     return data;
   },
 
@@ -78,4 +117,3 @@ export const masterDataService = {
   },
 
 };
-

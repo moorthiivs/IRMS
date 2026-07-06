@@ -53,8 +53,21 @@ export class InspectionsController {
     @Query('approval') approval?: string,
     @Query('date') date?: string,
     @Query('shiftId') shiftId?: string,
+    @Query('partId') partId?: string,
+    @Query('operationId') operationId?: string,
   ) {
-    return this.inspectionsService.getRecentInspections(status, approval, date, shiftId);
+    return this.inspectionsService.getRecentInspections(status, approval, date, shiftId, partId, operationId);
+  }
+
+  @Get('trends')
+  async getTrends(
+    @Query('partId') partId: string,
+    @Query('operationId') operationId: string,
+    @Query('days') days?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.inspectionsService.getTrends(partId, operationId, days ? parseInt(days, 10) : 7, startDate, endDate);
   }
 
   @Get('daily')

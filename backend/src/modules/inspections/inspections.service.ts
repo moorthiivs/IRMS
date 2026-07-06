@@ -210,7 +210,7 @@ export class InspectionsService {
     return transaction;
   }
 
-  async getRecentInspections(status?: string, approval?: string, dateStr?: string, shiftId?: string) {
+  async getRecentInspections(status?: string, approval?: string, dateStr?: string, shiftId?: string, partId?: string, operationId?: string) {
     const where: any = {};
 
     if (status === 'PASSED' || status === 'REJECTED') {
@@ -232,6 +232,14 @@ export class InspectionsService {
 
     if (shiftId) {
       where.shiftId = shiftId;
+    }
+
+    if (partId) {
+      where.partId = partId;
+    }
+
+    if (operationId) {
+      where.operationId = operationId;
     }
 
     const query: any = {
@@ -315,7 +323,7 @@ export class InspectionsService {
       this.prisma.shift.findMany(),
       this.prisma.inspectionTransaction.findMany({
         where: { inspectionTimestamp: { gte: startOfDay, lte: endOfDay } },
-        include: { shift: true },
+        include: { shift: true, part: { include: { customer: true } } },
       }),
     ]);
 
@@ -326,14 +334,49 @@ export class InspectionsService {
     }, {} as Record<string, { total: number; pass: number; fail: number }>);
 
     transactionsToday.forEach((tx) => {
-      const sName = tx.shift.name;
-      if (shiftSummary[sName]) {
+      const sName = tx.shift?.name;
+      if (sName && shiftSummary[sName]) {
         shiftSummary[sName].total++;
         if (tx.status === TransactionStatus.PASSED) {
           shiftSummary[sName].pass++;
         } else {
           shiftSummary[sName].fail++;
         }
+      }
+    });
+
+    // ── Customer-wise summary (today) ────────────────────────────
+    const customerSummary: Record<string, { name: string; total: number; pass: number; fail: number }> = {};
+    transactionsToday.forEach((tx) => {
+      const custName = tx.part?.customer?.name || 'Unassigned';
+      const custId = tx.part?.customer?.id || '__unassigned';
+      if (!customerSummary[custId]) {
+        customerSummary[custId] = { name: custName, total: 0, pass: 0, fail: 0 };
+      }
+      customerSummary[custId].total++;
+      if (tx.status === TransactionStatus.PASSED) {
+        customerSummary[custId].pass++;
+      } else {
+        customerSummary[custId].fail++;
+      }
+    });
+
+    // ── Part-wise summary (today) ────────────────────────────────
+    const partSummary: Record<string, { partNumber: string; customerName: string | null; total: number; pass: number; fail: number }> = {};
+    transactionsToday.forEach((tx) => {
+      const partId = tx.partId;
+      if (!partSummary[partId]) {
+        partSummary[partId] = {
+          partNumber: tx.part?.partNumber || 'Unknown',
+          customerName: tx.part?.customer?.name || null,
+          total: 0, pass: 0, fail: 0,
+        };
+      }
+      partSummary[partId].total++;
+      if (tx.status === TransactionStatus.PASSED) {
+        partSummary[partId].pass++;
+      } else {
+        partSummary[partId].fail++;
       }
     });
 
@@ -443,6 +486,8 @@ export class InspectionsService {
       pendingCount,
       approvalPendingCount,
       shiftSummary,
+      customerSummary,
+      partSummary,
       recentActivity: dynamicChart,
     };
   }
@@ -663,5 +708,142 @@ export class InspectionsService {
     });
 
     return { message: 'Inspection report deleted successfully' };
+  }
+
+  async getTrends(partId: string, operationId: string, days: number = 7, startDate?: string, endDate?: string) {
+    let start: Date;
+    let end: Date;
+
+    if (startDate && endDate) {
+      start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+    } else {
+      end = new Date();
+      end.setHours(23, 59, 59, 999);
+      start = new Date();
+      start.setDate(start.getDate() - (days - 1));
+      start.setHours(0, 0, 0, 0);
+    }
+
+    // Get all transactions with details in the date range
+    const transactions = await this.prisma.inspectionTransaction.findMany({
+      where: {
+        partId,
+        operationId,
+        inspectionTimestamp: { gte: start, lte: end },
+      },
+      include: {
+        shift: true,
+        details: {
+          include: { parameter: true },
+        },
+      },
+      orderBy: { inspectionTimestamp: 'asc' },
+    });
+
+    // Get parameters for this part/operation
+    const parameters = await this.prisma.inspectionParameter.findMany({
+      where: { partId, operationId },
+      orderBy: { sequence: 'asc' },
+    });
+
+    // Helper to get YYYY-MM-DD in local time
+    const toLocalDateStr = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    // Build daily aggregation per parameter
+    // Structure: { parameterId: { date: { min, max, avg, count, shiftCounts: { [shiftName]: count }, readings: [] } } }
+    const trendMap: Record<string, Record<string, { 
+      min: number; 
+      max: number; 
+      sum: number; 
+      count: number; 
+      shiftCounts: Record<string, number>;
+      readings: Array<{ shiftName: string; interval: string; value: string; timestamp: Date }>
+    }>> = {};
+
+    transactions.forEach(tx => {
+      const dateStr = toLocalDateStr(tx.inspectionTimestamp);
+      const shiftName = tx.shift?.name || 'Unassigned Shift';
+      tx.details.forEach(detail => {
+        const val = parseFloat(detail.observedValue);
+        if (isNaN(val)) return; // Skip non-numeric values
+
+        if (!trendMap[detail.parameterId]) trendMap[detail.parameterId] = {};
+        if (!trendMap[detail.parameterId][dateStr]) {
+          trendMap[detail.parameterId][dateStr] = { 
+            min: val, 
+            max: val, 
+            sum: val, 
+            count: 1, 
+            shiftCounts: { [shiftName]: 1 },
+            readings: [{
+              shiftName,
+              interval: tx.intervalName,
+              value: detail.observedValue,
+              timestamp: tx.inspectionTimestamp
+            }]
+          };
+        } else {
+          const entry = trendMap[detail.parameterId][dateStr];
+          entry.min = Math.min(entry.min, val);
+          entry.max = Math.max(entry.max, val);
+          entry.sum += val;
+          entry.count++;
+          entry.shiftCounts[shiftName] = (entry.shiftCounts[shiftName] || 0) + 1;
+          entry.readings.push({
+            shiftName,
+            interval: tx.intervalName,
+            value: detail.observedValue,
+            timestamp: tx.inspectionTimestamp
+          });
+        }
+      });
+    });
+
+    // Build date labels
+    const dateLabels: string[] = [];
+    const current = new Date(start);
+    while (current <= end) {
+      dateLabels.push(toLocalDateStr(current));
+      current.setDate(current.getDate() + 1);
+    }
+
+    // Build series per parameter
+    const parameterTrends = parameters.map(param => {
+      const paramData = trendMap[param.id] || {};
+      return {
+        parameterId: param.id,
+        parameterName: param.parameterName,
+        specText: param.specText,
+        nominalValue: param.nominalValue,
+        methodOfChecking: param.methodOfChecking,
+        controlLimitMin: param.controlLimitMin,
+        controlLimitMax: param.controlLimitMax,
+        daily: dateLabels.map(date => {
+          const entry = paramData[date];
+          return {
+            date,
+            min: entry ? entry.min : null,
+            max: entry ? entry.max : null,
+            avg: entry ? Math.round((entry.sum / entry.count) * 1000) / 1000 : null,
+            count: entry ? entry.count : 0,
+            shiftCounts: entry ? entry.shiftCounts : {},
+            readings: entry ? entry.readings : [],
+          };
+        }),
+      };
+    });
+
+    return {
+      dateLabels,
+      parameters: parameterTrends,
+    };
   }
 }
