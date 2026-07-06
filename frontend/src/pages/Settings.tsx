@@ -13,6 +13,12 @@ import { notifications } from '@mantine/notifications';
 export function Settings() {
   const queryClient = useQueryClient();
 
+  const formatVersion = (v: string | null) => {
+    if (!v || v === 'built-in') return 'v1.0.0 (Built-in)';
+    if (v.length >= 40) return `v1.0.0-${v.substring(0, 7)}`;
+    return v;
+  };
+
   const { data: settings = {}, isLoading } = useQuery({
     queryKey: ['settings'],
     queryFn: settingsService.getAll,
@@ -29,9 +35,11 @@ export function Settings() {
   const isNative = Capacitor.isNativePlatform();
 
   useEffect(() => {
-    setCurrentVersion(localStorage.getItem('app_version') || 'built-in');
     if (isNative) {
+      setCurrentVersion(localStorage.getItem('app_version') || 'built-in');
       checkVersion();
+    } else {
+      setCurrentVersion(import.meta.env.VITE_APP_VERSION || 'built-in');
     }
   }, []);
 
@@ -279,7 +287,7 @@ export function Settings() {
                   Current Version
                 </Text>
                 <Text size="xs" c="dimmed">
-                  {currentVersion}
+                  {formatVersion(currentVersion)}
                 </Text>
               </div>
               
@@ -290,7 +298,7 @@ export function Settings() {
                   onClick={handleManualUpdate}
                   loading={isUpdating}
                 >
-                  Update Available ({remoteVersion})
+                  Update Available ({formatVersion(remoteVersion)})
                 </Button>
               )}
             </Group>

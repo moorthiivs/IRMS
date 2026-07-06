@@ -35,6 +35,8 @@ jobs:
 
       - name: Build Frontend Web App
         working-directory: ./frontend
+        env:
+          VITE_APP_VERSION: ${{ github.sha }}
         run: npm run build
 
       - name: Sync Capacitor
