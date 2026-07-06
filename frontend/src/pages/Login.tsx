@@ -75,7 +75,7 @@ export function Login() {
           </div>
 
           <Title order={2} className="text-3xl font-bold text-gray-900 mb-2" ta="center">
-            Welcome Back
+            Welcome Backss
           </Title>
           <Text c="dimmed" size="sm" ta="center" mb={30}>
             Please sign in to your account to continue
