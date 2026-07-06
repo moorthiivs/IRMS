@@ -50,14 +50,14 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen flex w-full bg-gray-50">
+    <div className="min-h-screen flex w-full bg-gray-50 dark:bg-[#1a1b1e]">
       {/* Left Side - Branding/Visuals */}
       <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 p-12 items-center justify-center relative overflow-hidden">
         {/* Decorative background elements */}
         <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent"></div>
         
         <div className="z-10 text-center text-white max-w-lg flex flex-col items-center">
-          <div className="bg-white p-4 rounded-2xl shadow-2xl mb-8 transform transition-transform hover:scale-105 duration-300">
+          <div className="bg-white dark:bg-[#25262b] p-4 rounded-2xl shadow-2xl mb-8 transform transition-transform hover:scale-105 duration-300">
             <img src="/logo.png" alt="IRMS Logo" className="w-32 h-auto rounded-lg" />
           </div>
           <h1 className="text-4xl font-bold mb-4 tracking-tight">Inspection & Reporting Management System</h1>
@@ -74,14 +74,14 @@ export function Login() {
              <img src="/logo.png" alt="IRMS Logo" className="w-24 h-auto rounded-xl shadow-lg" />
           </div>
 
-          <Title order={2} className="text-3xl font-bold text-gray-900 mb-2" ta="center">
+          <Title order={2} className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2" ta="center">
             Welcome Back
           </Title>
           <Text c="dimmed" size="sm" ta="center" mb={30}>
             Please sign in to your account to continue
           </Text>
 
-          <Paper withBorder shadow="xl" p={40} radius="lg" className="bg-white/80 backdrop-blur-sm">
+          <Paper withBorder shadow="xl" p={40} radius="lg" className="bg-white/80 dark:bg-[#25262b]/80 backdrop-blur-sm">
             {error && (
               <Alert icon={<AlertCircle size={16} />} title="Error" color="red" mb="lg" radius="md">
                 {error}

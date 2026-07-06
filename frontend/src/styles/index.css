@@ -12,7 +12,8 @@ html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
-  background-color: #f8fafc; /* tailwind slate-50 */
+  background-color: var(--mantine-color-body);
+  color: var(--mantine-color-text);
 }
 
 /* Make touch targets large enough on touch screens */

@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
 import {
   Title, Paper, Group, Text, Switch, Stack, Badge,
-  Divider, Card, Alert, Loader, Button
+  Divider, Card, Alert, Loader, Button, SegmentedControl, useMantineColorScheme, useComputedColorScheme, ActionIcon
 } from '@mantine/core';
 import { Capacitor } from '@capacitor/core';
-import { Settings as SettingsIcon, ShieldAlert, Trash2, Info, Hash } from 'lucide-react';
+import { Settings as SettingsIcon, ShieldAlert, Trash2, Info, Hash, Sun, Moon, Monitor } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { settingsService } from '../services/settings.service';
 import { notifications } from '@mantine/notifications';
 
 export function Settings() {
   const queryClient = useQueryClient();
+  const { colorScheme, setColorScheme } = useMantineColorScheme();
+  const computedColorScheme = useComputedColorScheme('light');
 
   const formatVersion = (v: string | null) => {
     if (!v || v === 'built-in') return 'v1.0.0 (Built-in)';
@@ -122,6 +124,58 @@ export function Settings() {
       </Group>
 
       <Stack gap="lg">
+        {/* Appearance Configuration */}
+        <Card withBorder radius="md" p="lg">
+          <Group mb="md" gap="sm">
+            <Sun size={20} />
+            <Text fw={600} size="lg">
+              Appearance
+            </Text>
+          </Group>
+
+          <Divider mb="md" />
+
+          <Text size="sm" c="dimmed" mb="md">
+            Customize the look and feel of the application. Select between light, dark, or system default mode.
+          </Text>
+
+          <Paper withBorder p="md" radius="md" bg="var(--mantine-color-gray-0)" darkHidden>
+            <Group justify="space-between" align="center">
+              <div>
+                <Text fw={600} size="sm">Theme Preference</Text>
+                <Text size="xs" c="dimmed">Currently using {computedColorScheme} mode</Text>
+              </div>
+              <SegmentedControl
+                value={colorScheme}
+                onChange={(value: any) => setColorScheme(value)}
+                data={[
+                  { label: <Group gap="xs" wrap="nowrap" justify="center"><Sun size={16} /> Light</Group>, value: 'light' },
+                  { label: <Group gap="xs" wrap="nowrap" justify="center"><Moon size={16} /> Dark</Group>, value: 'dark' },
+                  { label: <Group gap="xs" wrap="nowrap" justify="center"><Monitor size={16} /> Auto</Group>, value: 'auto' },
+                ]}
+              />
+            </Group>
+          </Paper>
+          
+          <Paper withBorder p="md" radius="md" bg="var(--mantine-color-dark-6)" lightHidden>
+            <Group justify="space-between" align="center">
+              <div>
+                <Text fw={600} size="sm">Theme Preference</Text>
+                <Text size="xs" c="dimmed">Currently using {computedColorScheme} mode</Text>
+              </div>
+              <SegmentedControl
+                value={colorScheme}
+                onChange={(value: any) => setColorScheme(value)}
+                data={[
+                  { label: <Group gap="xs" wrap="nowrap" justify="center"><Sun size={16} /> Light</Group>, value: 'light' },
+                  { label: <Group gap="xs" wrap="nowrap" justify="center"><Moon size={16} /> Dark</Group>, value: 'dark' },
+                  { label: <Group gap="xs" wrap="nowrap" justify="center"><Monitor size={16} /> Auto</Group>, value: 'auto' },
+                ]}
+              />
+            </Group>
+          </Paper>
+        </Card>
+
         {/* Lot Number Configuration */}
         <Card withBorder radius="md" p="lg">
           <Group mb="md" gap="sm">
@@ -144,7 +198,7 @@ export function Settings() {
             Controls whether the Lot Number field is mandatory when submitting an inspection.
           </Text>
 
-          <Paper withBorder p="md" radius="md" bg="gray.0">
+          <Paper withBorder p="md" radius="md">
             <Group justify="space-between" align="flex-start">
               <div style={{ flex: 1 }}>
                 <Group gap="xs" mb={4}>
@@ -192,7 +246,7 @@ export function Settings() {
             have associated inspection history (transactions).
           </Text>
 
-          <Paper withBorder p="md" radius="md" bg="gray.0">
+          <Paper withBorder p="md" radius="md">
             <Group justify="space-between" align="flex-start">
               <div style={{ flex: 1 }}>
                 <Group gap="xs" mb={4}>
@@ -240,7 +294,7 @@ export function Settings() {
 
           <Divider mb="md" />
           
-          <Paper withBorder p="md" radius="md" bg="gray.0">
+          <Paper withBorder p="md" radius="md">
             <Group justify="space-between" align="center">
               <div>
                 <Text fw={600} size="sm">

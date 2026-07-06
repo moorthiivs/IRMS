@@ -205,7 +205,7 @@ export function ReportPreview() {
       </Group>
 
       {/* A4 Landscape Print Area */}
-      <Paper withBorder p="xl" className="print:border-0 print:p-0 bg-white min-h-[500px] overflow-x-auto print:overflow-visible">
+      <Paper withBorder p="xl" className="print:border-0 print:p-0 bg-white dark:bg-[#1a1b1e] min-h-[500px] overflow-x-auto print:overflow-visible">
         <div className="min-w-[800px] print:min-w-full">
           <div className="text-center mb-6">
             <Title order={3}>YNC Cover plate check sheet</Title>

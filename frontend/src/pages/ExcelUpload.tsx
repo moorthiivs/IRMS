@@ -120,7 +120,7 @@ export function ExcelUpload({ onUploadSuccess }: { onUploadSuccess?: () => void 
           p="xl"
           radius="md"
           className={`flex flex-col items-center justify-center border-dashed border-2 transition-colors cursor-pointer min-h-[300px] ${
-            isDragActive ? 'bg-blue-50 border-blue-400' : 'bg-gray-50 hover:bg-gray-100'
+            isDragActive ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-400 dark:border-blue-800' : 'bg-gray-50 dark:bg-[#1a1b1e] hover:bg-gray-100 dark:hover:bg-[#25262b]'
           }`}
           {...getRootProps()}
         >
@@ -244,7 +244,7 @@ export function ExcelUpload({ onUploadSuccess }: { onUploadSuccess?: () => void 
 
           <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
             <Table striped highlightOnHover>
-              <Table.Thead className="sticky top-0 bg-white z-10">
+              <Table.Thead className="sticky top-0 bg-white dark:bg-[#1a1b1e] z-10">
                 <Table.Tr>
                   <Table.Th>Row</Table.Th>
                   <Table.Th>Part No</Table.Th>

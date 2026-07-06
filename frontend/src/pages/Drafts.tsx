@@ -44,7 +44,7 @@ export function Drafts() {
         ) : (
           <div className="overflow-x-auto">
             <Table verticalSpacing="sm" striped highlightOnHover style={{ minWidth: 700 }}>
-              <Table.Thead className="bg-gray-50">
+              <Table.Thead className="bg-gray-50 dark:bg-[#25262b]">
                 <Table.Tr>
                   <Table.Th>Saved On</Table.Th>
                   <Table.Th>Part Number</Table.Th>

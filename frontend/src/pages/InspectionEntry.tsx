@@ -506,7 +506,7 @@ export function InspectionEntry() {
       )}
 
       {selectedPart && selectedOp && (
-        <Paper withBorder p="md" radius="md" mb="xl" className="bg-blue-50/20 border-blue-200">
+        <Paper withBorder p="md" radius="md" mb="xl" className="bg-blue-50/20 dark:bg-blue-900/10 border-blue-200 dark:border-blue-900">
           <Group justify="space-between" align="flex-start" className="flex-col sm:flex-row">
             <div className="mb-2 sm:mb-0">
               <Text size="sm" fw={700} c="blue.8">Today's Inspection Completion Status</Text>
@@ -528,7 +528,7 @@ export function InspectionEntry() {
                 }
 
                 return (
-                  <Paper key={shiftName} withBorder px="sm" py="xs" radius="sm" className="bg-white">
+                  <Paper key={shiftName} withBorder px="sm" py="xs" radius="sm" className="bg-white dark:bg-[#25262b]">
                     <Group gap="xs">
                       <Text size="xs" fw={700} c="gray.7">{shiftName}:</Text>
                       <Badge color={color} size="sm" variant="light">
@@ -545,7 +545,7 @@ export function InspectionEntry() {
 
       {/* Feature 6: Method of Checking Filter */}
       {parameters.length > 0 && uniqueMethods.length > 1 && (
-        <Paper withBorder p="sm" radius="md" mb="md" className="bg-gray-50">
+        <Paper withBorder p="sm" radius="md" mb="md" className="bg-gray-50 dark:bg-[#25262b]">
           <Group gap="sm" align="center">
             <Select
               label="Filter by Method of Checking"
@@ -580,7 +580,7 @@ export function InspectionEntry() {
           <Paper withBorder p={0} radius="md" className="hidden md:block overflow-hidden mb-8">
           <div className="overflow-x-auto">
             <Table striped highlightOnHover verticalSpacing="md" style={{ minWidth: 800 }}>
-              <Table.Thead className="bg-gray-50">
+              <Table.Thead className="bg-gray-50 dark:bg-[#25262b]">
                 <Table.Tr>
                   <Table.Th>Parameter</Table.Th>
                   <Table.Th>Specification</Table.Th>
@@ -702,7 +702,7 @@ export function InspectionEntry() {
             <Paper withBorder radius="md" p={0} className="overflow-hidden">
               <div className="overflow-x-auto">
                 <Table striped highlightOnHover verticalSpacing="sm" style={{ minWidth: 500 }}>
-                  <Table.Thead className="bg-gray-50">
+                  <Table.Thead className="bg-gray-50 dark:bg-[#25262b]">
                     <Table.Tr>
                       <Table.Th style={{ width: 40 }}>#</Table.Th>
                       <Table.Th>Parameter</Table.Th>
@@ -992,7 +992,7 @@ export function InspectionEntry() {
               <div 
                 style={transitionStyles} 
                 className={`p-3 sm:p-4 shadow-lg border-t ${
-                  anyFailed ? 'bg-red-50' : allPassed ? 'bg-green-50' : 'bg-white'
+                  anyFailed ? 'bg-red-50 dark:bg-red-900/20' : allPassed ? 'bg-green-50 dark:bg-green-900/20' : 'bg-white dark:bg-[#25262b]'
                 }`}
               >
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 pl-[250px] max-md:pl-0 w-full max-w-7xl mx-auto">

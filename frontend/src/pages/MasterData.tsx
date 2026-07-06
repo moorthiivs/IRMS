@@ -365,7 +365,7 @@ function PartRow({
         <Table.Tr>
           <Table.Td colSpan={6} style={{ padding: 0 }}>
             <Collapse in={expanded}>
-              <div style={{ padding: '8px 16px 16px 48px', background: '#f8f9fa' }}>
+              <div style={{ padding: '8px 16px 16px 48px' }} className="bg-gray-50 dark:bg-[#1f2025]">
                 {part.operations.length === 0 ? (
                   <Text size="sm" c="dimmed" py="sm">
                     No operations assigned to this part.

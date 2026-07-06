@@ -219,8 +219,8 @@ export function Dashboard() {
         intersect: false,
         custom: function({ dataPointIndex, w }: any) {
           const dateLabel = dateLabels[dataPointIndex];
-          let html = `<div class="px-3 py-2 shadow-lg bg-white border border-gray-200 rounded-md" style="min-width: 250px;">`;
-          html += `<div class="text-xs font-bold text-gray-600 border-b pb-1 mb-2">${dateLabel}</div>`;
+          let html = `<div class="px-3 py-2 shadow-lg bg-white dark:bg-[#25262b] border border-gray-200 dark:border-gray-700 rounded-md text-gray-800 dark:text-gray-200" style="min-width: 250px;">`;
+          html += `<div class="text-xs font-bold text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 pb-1 mb-2">${dateLabel}</div>`;
 
           paramsToShow.forEach((param: any, idx: number) => {
             const dailyData = param.daily[dataPointIndex];
@@ -242,8 +242,8 @@ export function Dashboard() {
                 const timeString = r.timestamp ? new Date(r.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
                 const timeLabel = timeString ? ` <span style="font-size: 0.85em; opacity: 0.7;">(${timeString})</span>` : '';
                 readingsHtml += `
-                  <div class="flex justify-between text-xs text-gray-700 py-0.5 border-b border-gray-50 last:border-0">
-                    <span class="text-gray-500">${r.shiftName} - ${r.interval}${timeLabel}:</span>
+                  <div class="flex justify-between text-xs text-gray-700 dark:text-gray-300 py-0.5 border-b border-gray-50 dark:border-gray-700/50 last:border-0">
+                    <span class="text-gray-500 dark:text-gray-400">${r.shiftName} - ${r.interval}${timeLabel}:</span>
                     <span class="font-semibold">${r.value}${devText}</span>
                   </div>
                 `;
@@ -251,11 +251,11 @@ export function Dashboard() {
 
               html += `
                 <div class="mb-3 last:mb-0">
-                  <div class="text-sm font-semibold flex items-center gap-1 border-b pb-0.5 mb-1">
+                  <div class="text-sm font-semibold flex items-center gap-1 border-b border-gray-200 dark:border-gray-700 pb-0.5 mb-1">
                     <span class="w-2 h-2 rounded-full inline-block" style="background-color: ${color}"></span>
                     ${param.parameterName}
                   </div>
-                  <div class="text-[10px] text-gray-400 mb-2">
+                  <div class="text-[10px] text-gray-500 dark:text-gray-400 mb-2">
                     Spec: <strong>${param.specText || '-'}</strong> ${param.methodOfChecking ? `| Method: <strong>${param.methodOfChecking}</strong>` : ''}
                   </div>
                   <div class="pl-1">

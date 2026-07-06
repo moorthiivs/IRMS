@@ -707,7 +707,7 @@ export function Reports() {
         </Tabs.List>
 
         <Tabs.Panel value="history">
-          <Paper withBorder p="sm" radius="md" mb="md" className="bg-blue-50">
+          <Paper withBorder p="sm" radius="md" mb="md" className="bg-blue-50 dark:bg-[#25262b]">
             <Group justify="space-between" align="center">
               <Group gap="xs" align="center">
                 <Text size="sm" fw={600} mr="sm">Filters:</Text>
@@ -808,7 +808,7 @@ export function Reports() {
                   {Object.entries(groupedRecent).map(([groupKey, groupTxs]) => (
                     <React.Fragment key={groupKey}>
                       <Table.Tr 
-                        className={`font-bold cursor-pointer transition-colors ${groupTxs.some((tx: any) => tx.status === 'REJECTED') ? 'bg-orange-50 hover:bg-orange-100 text-orange-900 border-b border-orange-200' : 'bg-white hover:bg-gray-50 border-b border-gray-200 shadow-sm'}`}
+                        className={`font-bold cursor-pointer transition-colors ${groupTxs.some((tx: any) => tx.status === 'REJECTED') ? 'bg-orange-50 hover:bg-orange-100 dark:bg-orange-900/20 dark:hover:bg-orange-900/30 text-orange-900 dark:text-orange-200 border-b border-orange-200 dark:border-orange-900/50' : 'bg-white hover:bg-gray-50 dark:bg-[#1a1b1e] dark:hover:bg-[#25262b] border-b border-gray-200 dark:border-gray-800 shadow-sm'}`}
                         onClick={() => toggleGroup(groupKey)}
                       >
                         <Table.Td colSpan={8} className="py-3">
@@ -817,7 +817,7 @@ export function Reports() {
                               <ThemeIcon variant="light" color={expandedGroups[groupKey] ? "blue" : "gray"} size="sm" radius="xl">
                                 {expandedGroups[groupKey] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                               </ThemeIcon>
-                              <Text size="sm" fw={700} className="text-gray-800">
+                              <Text size="sm" fw={700} className="text-gray-800 dark:text-gray-200">
                                 {groupKey}
                               </Text>
                               <Badge size="xs" variant="filled" color="gray" radius="sm">{groupTxs.length} item{groupTxs.length > 1 ? 's' : ''}</Badge>
@@ -844,9 +844,9 @@ export function Reports() {
                         <Table.Tr 
                           key={item.id} 
                           className={
-                            selectedIds.includes(item.id) ? 'bg-red-50/40' 
-                            : item.status === 'REJECTED' ? 'bg-orange-50/40' 
-                            : 'bg-slate-50/50 hover:bg-slate-100/80 transition-colors'
+                            selectedIds.includes(item.id) ? 'bg-red-50/40 dark:bg-red-900/20' 
+                            : item.status === 'REJECTED' ? 'bg-orange-50/40 dark:bg-orange-900/20' 
+                            : 'bg-slate-50/50 hover:bg-slate-100/80 dark:bg-[#25262b]/50 dark:hover:bg-[#2c2e33]/80 transition-colors'
                           }
                         >
                           <Table.Td className="border-l-[3px] border-l-blue-400 pl-4">
@@ -1035,7 +1035,7 @@ export function Reports() {
       >
         {correctionTx && (
           <div>
-            <Paper withBorder p="sm" radius="md" mb="md" className="bg-red-50">
+            <Paper withBorder p="sm" radius="md" mb="md" className="bg-red-50 dark:bg-red-900/20">
               <Group gap="xs" mb="xs">
                 <Badge color="red" variant="filled" size="sm">REJECTED</Badge>
                 <Text size="sm" fw={600}>
@@ -1199,17 +1199,17 @@ export function Reports() {
             </Button>
           </Group>
 
-          <Paper withBorder p="xl" className="print:border-0 print:p-0 bg-white shadow-sm overflow-x-auto print:overflow-visible">
+          <Paper withBorder p="xl" className="print:border-0 print:p-0 bg-white dark:bg-[#1a1b1e] shadow-sm overflow-x-auto print:overflow-visible text-black dark:text-gray-200">
             <div className="min-w-[900px] print:min-w-full">
               {/* Header Box matching original sample.pdf format */}
-              <div className="border border-black flex items-stretch text-sm font-medium mb-2 bg-white text-black">
+              <div className="border border-black dark:border-gray-600 flex items-stretch text-sm font-medium mb-2 bg-white dark:bg-[#25262b] text-black dark:text-gray-200">
                 {/* Left section: Logo + Company info + Date / Machine info */}
                 <div className="w-[35%] p-3 border-r border-black flex flex-col justify-between">
                   <div className="flex items-center gap-2">
                     <img src="/tvs_logo.jpeg" alt="TVS Logo" className="h-10 w-auto object-contain" />
                     <div>
-                      <Text size="sm" fw={800} className="text-black font-extrabold leading-tight">Sundram Fasteners Limited,</Text>
-                      <Text size="xs" className="text-gray-700 font-semibold leading-tight">Autolec Division, Plant - II.</Text>
+                      <div className="font-bold text-lg mb-1 text-[#000080] dark:text-blue-300">Sundram Fasteners Limited,</div>
+                      <div className="text-xs text-[#000080] dark:text-blue-300">Autolec Division, Plant - II.</div>
                     </div>
                   </div>
                   <div className="mt-3 space-y-1 text-xs">
@@ -1225,7 +1225,7 @@ export function Reports() {
                 </div>
 
                 {/* Right section: Part number, Part name, Operation number */}
-                <div className="w-[27%] p-3 flex flex-col justify-center items-end text-xs pr-4 bg-white text-black">
+                <div className="w-[27%] p-3 flex flex-col justify-center items-end text-xs pr-4 bg-white dark:bg-[#25262b] text-black dark:text-white">
                   <div className="space-y-1.5 text-left">
                     <div className="flex items-center">
                       <span className="font-semibold text-black whitespace-nowrap" style={{ width: '100px', display: 'inline-block' }}>PART NO:</span>
@@ -1244,8 +1244,8 @@ export function Reports() {
               </div>
 
               {/* Main Table Grid */}
-              <Table withTableBorder withColumnBorders borderColor="#000" verticalSpacing="xs" horizontalSpacing="xs" style={{ borderCollapse: 'collapse' }}>
-                <Table.Thead className="bg-gray-50 text-center font-bold text-xs">
+              <Table withTableBorder withColumnBorders borderColor="#000" verticalSpacing="xs" horizontalSpacing="xs" style={{ borderCollapse: 'collapse' }} className="dark:text-gray-200">
+                <Table.Thead className="bg-gray-50 dark:bg-[#25262b] text-center font-bold text-xs">
                   <Table.Tr>
                     <Table.Th rowSpan={2} style={{ width: 45 }} className="text-center">S. No.</Table.Th>
                     <Table.Th rowSpan={2} className="text-center">Description</Table.Th>
@@ -1254,24 +1254,24 @@ export function Reports() {
                     <Table.Th colSpan={3} rowSpan={2} style={{ width: 170 }} className="text-center">Specification (Standard)</Table.Th>
                     <Table.Th rowSpan={2} style={{ width: 120 }} className="text-center">Method of checking</Table.Th>
                     <Table.Th rowSpan={2} style={{ width: 90 }} className="text-center">Freq. of Inspn.</Table.Th>
-                    <Table.Th colSpan={2} className="text-center bg-blue-50">1st Shift (Shift A)</Table.Th>
-                    <Table.Th colSpan={2} className="text-center bg-teal-50">2nd Shift (Shift B)</Table.Th>
-                    <Table.Th colSpan={2} className="text-center bg-orange-50">3rd Shift (Shift C)</Table.Th>
+                    <Table.Th colSpan={2} className="text-center bg-blue-50 dark:bg-blue-900/20 text-black dark:text-white">1st Shift (Shift A)</Table.Th>
+                    <Table.Th colSpan={2} className="text-center bg-teal-50 dark:bg-teal-900/20 text-black dark:text-white">2nd Shift (Shift B)</Table.Th>
+                    <Table.Th colSpan={2} className="text-center bg-orange-50 dark:bg-orange-900/20 text-black dark:text-white">3rd Shift (Shift C)</Table.Th>
                   </Table.Tr>
                   <Table.Tr>
-                    <Table.Th style={{ width: 85 }} className="text-center bg-blue-50/50">1 Half</Table.Th>
-                    <Table.Th style={{ width: 85 }} className="text-center bg-blue-50/50">2 Half</Table.Th>
-                    <Table.Th style={{ width: 85 }} className="text-center bg-teal-50/50">1 Half</Table.Th>
-                    <Table.Th style={{ width: 85 }} className="text-center bg-teal-50/50">2 Half</Table.Th>
-                    <Table.Th style={{ width: 85 }} className="text-center bg-orange-50/50">1 Half</Table.Th>
-                    <Table.Th style={{ width: 85 }} className="text-center bg-orange-50/50">2 Half</Table.Th>
+                    <Table.Th style={{ width: 85 }} className="text-center bg-blue-50/50 dark:bg-blue-900/10">1 Half</Table.Th>
+                    <Table.Th style={{ width: 85 }} className="text-center bg-blue-50/50 dark:bg-blue-900/10">2 Half</Table.Th>
+                    <Table.Th style={{ width: 85 }} className="text-center bg-teal-50/50 dark:bg-teal-900/10">1 Half</Table.Th>
+                    <Table.Th style={{ width: 85 }} className="text-center bg-teal-50/50 dark:bg-teal-900/10">2 Half</Table.Th>
+                    <Table.Th style={{ width: 85 }} className="text-center bg-orange-50/50 dark:bg-orange-900/10">1 Half</Table.Th>
+                    <Table.Th style={{ width: 85 }} className="text-center bg-orange-50/50 dark:bg-orange-900/10">2 Half</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody className="text-xs">
                   {parameters.map((param, index) => {
                     const [nominal, symbol, limit] = parseSpecText(param.specText || `${param.nominalValue} ±${param.upperTolerance}`);
                     return (
-                      <Table.Tr key={param.id} className="hover:bg-gray-50/30">
+                      <Table.Tr key={param.id} className="hover:bg-gray-50/30 dark:hover:bg-gray-800/30">
                         <Table.Td className="text-center font-semibold">{String(index + 1).padStart(2, '0')}</Table.Td>
                         <Table.Td className="font-semibold">{param.parameterName}</Table.Td>
                         
@@ -1308,7 +1308,7 @@ export function Reports() {
                   })}
                   
                   {/* Status / Verifications Footer */}
-                  <Table.Tr className="bg-gray-50/50 font-bold">
+                  <Table.Tr className="bg-gray-50/50 dark:bg-[#25262b]/50 font-bold">
                     <Table.Td colSpan={8} className="text-right pr-4 font-bold">OK / NG</Table.Td>
                     <Table.Td className="text-center">{getFooterStatus('Shift A', '1 Half')}</Table.Td>
                     <Table.Td className="text-center">{getFooterStatus('Shift A', '2 Half')}</Table.Td>
@@ -1317,7 +1317,7 @@ export function Reports() {
                     <Table.Td className="text-center">{getFooterStatus('Shift C', '1 Half')}</Table.Td>
                     <Table.Td className="text-center">{getFooterStatus('Shift C', '2 Half')}</Table.Td>
                   </Table.Tr>
-                  <Table.Tr className="bg-gray-50/50 font-medium">
+                  <Table.Tr className="bg-gray-50/50 dark:bg-[#25262b]/50 font-medium">
                     <Table.Td colSpan={8} className="text-right pr-4">Inspected by</Table.Td>
                     <Table.Td className="text-center text-[10px]">
                       {getInspectorSignature('Shift A', '1 Half') || getFooterInspector('Shift A', '1 Half')}
@@ -1338,13 +1338,13 @@ export function Reports() {
                       {getInspectorSignature('Shift C', '2 Half') || getFooterInspector('Shift C', '2 Half')}
                     </Table.Td>
                   </Table.Tr>
-                  <Table.Tr className="bg-gray-50/50 font-medium">
+                  <Table.Tr className="bg-gray-50/50 dark:bg-[#25262b]/50 font-medium">
                     <Table.Td colSpan={8} className="text-right pr-4">Checked by</Table.Td>
                     <Table.Td colSpan={2} className="text-center text-[10px]">{getApproverSignature('Shift A')}</Table.Td>
                     <Table.Td colSpan={2} className="text-center text-[10px]">{getApproverSignature('Shift B')}</Table.Td>
                     <Table.Td colSpan={2} className="text-center text-[10px]">{getApproverSignature('Shift C')}</Table.Td>
                   </Table.Tr>
-                  <Table.Tr className="bg-gray-50/50 font-medium print:hidden">
+                  <Table.Tr className="bg-gray-50/50 dark:bg-[#25262b]/50 font-medium print:hidden">
                     <Table.Td colSpan={8} className="text-right pr-4">Approve</Table.Td>
                     {['Shift A', 'Shift B', 'Shift C'].map(shift => {
                       const unapproved = getUnapprovedTxIds(shift);
@@ -1390,7 +1390,7 @@ export function Reports() {
               </Table>
 
               {/* Bottom Metadata & Notes Section */}
-              <div className="mt-4 border border-gray-300 p-3 rounded-sm flex justify-between text-xs font-semibold text-gray-700 bg-gray-50/20">
+              <div className="mt-4 border border-gray-300 dark:border-gray-600 p-3 rounded-sm flex justify-between text-xs font-semibold text-gray-700 dark:text-gray-300 bg-gray-50/20 dark:bg-[#25262b]/20">
                 <div style={{ width: '40%' }}>
                   <Text fw={700} mb="xs">Abbreviations</Text>
                   <Table withTableBorder withColumnBorders verticalSpacing="xs" horizontalSpacing="xs" style={{ width: '100%' }}>
@@ -1409,7 +1409,7 @@ export function Reports() {
                 
                 <div style={{ width: '55%' }}>
                   <Text fw={700} mb="xs">Remarks / Observations Log</Text>
-                  <Paper withBorder p="xs" style={{ minHeight: 60 }} className="bg-white">
+                  <Paper withBorder p="xs" style={{ minHeight: 60 }} className="bg-white dark:bg-[#25262b]">
                     <Text size="xs" className="italic text-gray-600">
                       {getRemarksText()}
                     </Text>

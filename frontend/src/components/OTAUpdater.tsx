@@ -114,7 +114,7 @@ export function OTAUpdater() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 50 }}
           transition={{ duration: 0.5, ease: 'easeOut' }}
-          className="fixed inset-0 z-[9999] bg-white flex flex-col items-center justify-center p-8 text-center"
+          className="fixed inset-0 z-[9999] bg-white dark:bg-[#1a1b1e] flex flex-col items-center justify-center p-8 text-center"
         >
           {/* Illustration Section */}
           <motion.div 
@@ -140,11 +140,11 @@ export function OTAUpdater() {
             transition={{ delay: 0.5, duration: 0.4 }}
             className="flex flex-col items-center w-full"
           >
-            <h1 className="text-3xl font-extrabold text-slate-800 mb-4 tracking-tight">
+            <h1 className="text-3xl font-extrabold text-slate-800 dark:text-gray-100 mb-4 tracking-tight">
               Time To Update!
             </h1>
             
-            <p className="text-slate-500 text-sm md:text-base max-w-[280px] leading-relaxed mb-8 font-medium">
+            <p className="text-slate-500 dark:text-gray-400 text-sm md:text-base max-w-[280px] leading-relaxed mb-8 font-medium">
               We added lots of new features and fix some bugs to make your experience as smooth as possible
             </p>
 
@@ -154,7 +154,7 @@ export function OTAUpdater() {
                 animate={{ opacity: 1, height: 'auto' }}
                 className="mb-6 w-full max-w-[240px]"
               >
-                <div className="w-full bg-slate-100 rounded-full h-2 mb-2 overflow-hidden">
+                <div className="w-full bg-slate-100 dark:bg-[#2c2e33] rounded-full h-2 mb-2 overflow-hidden">
                   <div 
                     className="bg-gradient-to-r from-pink-500 to-orange-400 h-2 rounded-full transition-all duration-300"
                     style={{ width: `${downloadPercent}%` }}
