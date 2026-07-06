@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import {
   Title, Paper, Group, Text, Switch, Stack, Badge,
-  Divider, Card, Alert, Loader,
+  Divider, Card, Alert, Loader, Button
 } from '@mantine/core';
+import { Capacitor } from '@capacitor/core';
+import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import { Settings as SettingsIcon, ShieldAlert, Trash2, Info, Hash } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { settingsService } from '../services/settings.service';
@@ -18,6 +20,89 @@ export function Settings() {
 
   const [cascadeDelete, setCascadeDelete] = useState(false);
   const [lotNumberRequired, setLotNumberRequired] = useState(true);
+
+  // OTA Update states
+  const [currentVersion, setCurrentVersion] = useState<string>('built-in');
+  const [remoteVersion, setRemoteVersion] = useState<string | null>(null);
+  const [hasUpdate, setHasUpdate] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const isNative = Capacitor.isNativePlatform();
+
+  useEffect(() => {
+    setCurrentVersion(localStorage.getItem('app_version') || 'built-in');
+    if (isNative) {
+      checkVersion();
+    }
+  }, []);
+
+  const checkVersion = async () => {
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+      let origin = '';
+      try {
+        const urlObj = new URL(baseUrl);
+        origin = urlObj.origin;
+      } catch (e) {
+        origin = 'https://irms-gzasfnghh6g2b3hu.centralindia-01.azurewebsites.net';
+      }
+
+      const res = await fetch(`${origin}/version.json?t=${Date.now()}`);
+      if (!res.ok) return;
+      
+      const data = await res.json();
+      const version = data.version;
+      const localVersion = localStorage.getItem('app_version') || 'built-in';
+
+      if (version && version !== localVersion) {
+        setRemoteVersion(version);
+        setHasUpdate(true);
+      }
+    } catch (error) {
+      console.error('Failed to check remote version:', error);
+    }
+  };
+
+  const handleManualUpdate = async () => {
+    if (!remoteVersion) return;
+    setIsUpdating(true);
+    try {
+      notifications.show({
+        id: 'settings-update',
+        loading: true,
+        title: 'Updating...',
+        message: 'Downloading the latest version',
+        autoClose: false,
+        withCloseButton: false,
+      });
+
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+      let origin = '';
+      try {
+        const urlObj = new URL(baseUrl);
+        origin = urlObj.origin;
+      } catch (e) {
+        origin = 'https://irms-gzasfnghh6g2b3hu.centralindia-01.azurewebsites.net';
+      }
+
+      const versionInfo = await CapacitorUpdater.download({
+        url: `${origin}/update.zip`,
+        version: remoteVersion,
+      });
+      
+      localStorage.setItem('app_version', remoteVersion);
+      await CapacitorUpdater.set(versionInfo);
+    } catch (err) {
+      setIsUpdating(false);
+      notifications.update({
+        id: 'settings-update',
+        loading: false,
+        title: 'Update Failed',
+        message: 'Failed to download or apply the update. Please try again later.',
+        color: 'red',
+        autoClose: 5000,
+      });
+    }
+  };
 
   useEffect(() => {
     setCascadeDelete(settings.deletion_policy === 'cascade');
@@ -175,6 +260,41 @@ export function Settings() {
               will permanently remove all associated inspection transactions and reports.
             </Alert>
           )}
+        </Card>
+        {/* App Version Info */}
+        <Card withBorder radius="md" p="lg">
+          <Group mb="md" gap="sm">
+            <Info size={20} />
+            <Text fw={600} size="lg">
+              App Version
+            </Text>
+          </Group>
+
+          <Divider mb="md" />
+          
+          <Paper withBorder p="md" radius="md" bg="gray.0">
+            <Group justify="space-between" align="center">
+              <div>
+                <Text fw={600} size="sm">
+                  Current Version
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {currentVersion}
+                </Text>
+              </div>
+              
+              {isNative && hasUpdate && (
+                <Button 
+                  size="xs" 
+                  color="blue" 
+                  onClick={handleManualUpdate}
+                  loading={isUpdating}
+                >
+                  Update Available ({remoteVersion})
+                </Button>
+              )}
+            </Group>
+          </Paper>
         </Card>
       </Stack>
     </div>

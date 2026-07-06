@@ -8,6 +8,7 @@ export function OTAUpdater() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [remoteVersion, setRemoteVersion] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [downloadPercent, setDownloadPercent] = useState(0);
   const [originUrl, setOriginUrl] = useState('');
 
   useEffect(() => {
@@ -15,6 +16,15 @@ export function OTAUpdater() {
     if (Capacitor.isNativePlatform()) {
       CapacitorUpdater.notifyAppReady();
       checkForUpdates();
+
+      // Listen for download progress
+      const listener = CapacitorUpdater.addListener('download', (info: any) => {
+        setDownloadPercent(Math.round(info.percent));
+      });
+
+      return () => {
+        listener.then(l => l.remove());
+      };
     }
   }, []);
 
@@ -36,8 +46,9 @@ export function OTAUpdater() {
       const data = await res.json();
       const version = data.version;
       const localVersion = localStorage.getItem('app_version') || 'built-in';
+      const skippedVersion = localStorage.getItem('skipped_version');
 
-      if (version && version !== localVersion) {
+      if (version && version !== localVersion && version !== skippedVersion) {
         setRemoteVersion(version);
         setUpdateAvailable(true);
       }
@@ -49,6 +60,7 @@ export function OTAUpdater() {
   const handleUpdate = async () => {
     if (!remoteVersion) return;
     setUpdating(true);
+    setDownloadPercent(0);
     try {
       notifications.show({
         id: 'ota-update',
@@ -81,6 +93,9 @@ export function OTAUpdater() {
   };
 
   const handleSkip = () => {
+    if (remoteVersion) {
+      localStorage.setItem('skipped_version', remoteVersion);
+    }
     setUpdateAvailable(false);
   };
 
@@ -116,31 +131,50 @@ export function OTAUpdater() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5, duration: 0.4 }}
-            className="flex flex-col items-center"
+            className="flex flex-col items-center w-full"
           >
             <h1 className="text-3xl font-extrabold text-slate-800 mb-4 tracking-tight">
               Time To Update!
             </h1>
             
-            <p className="text-slate-500 text-sm md:text-base max-w-[280px] leading-relaxed mb-10 font-medium">
+            <p className="text-slate-500 text-sm md:text-base max-w-[280px] leading-relaxed mb-8 font-medium">
               We added lots of new features and fix some bugs to make your experience as smooth as possible
             </p>
+
+            {updating && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="mb-6 w-full max-w-[240px]"
+              >
+                <div className="w-full bg-slate-100 rounded-full h-2 mb-2 overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-pink-500 to-orange-400 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${downloadPercent}%` }}
+                  ></div>
+                </div>
+                <p className="text-xs text-orange-500 font-bold animate-pulse">
+                  ⚠️ Please do not close the app
+                </p>
+              </motion.div>
+            )}
 
             <button
               onClick={handleUpdate}
               disabled={updating}
-              className={`w-full max-w-[240px] rounded-full py-4 px-8 text-white font-bold tracking-wider shadow-lg shadow-pink-500/30 bg-gradient-to-r from-pink-500 to-orange-400 hover:from-pink-600 hover:to-orange-500 transition-all duration-300 transform hover:-translate-y-1 ${updating ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'}`}
+              className={`w-full max-w-[280px] rounded-xl py-4 px-8 text-white font-bold text-lg tracking-wide shadow-xl shadow-pink-500/30 bg-gradient-to-r from-pink-500 to-orange-400 hover:opacity-90 transition-all duration-300 transform hover:-translate-y-1 ${updating ? 'opacity-90 cursor-not-allowed transform-none hover:transform-none' : 'active:scale-95'}`}
             >
-              {updating ? 'UPDATING...' : 'UPDATE APP'}
+              {updating ? `UPDATING... ${downloadPercent}%` : 'UPDATE APP'}
             </button>
 
-            <button
-              onClick={handleSkip}
-              disabled={updating}
-              className={`mt-6 text-slate-400 font-bold text-sm tracking-widest hover:text-slate-600 transition-colors ${updating ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              NOT NOW
-            </button>
+            {!updating && (
+              <button
+                onClick={handleSkip}
+                className="mt-4 w-full max-w-[280px] rounded-xl py-4 px-8 text-slate-500 font-bold text-base tracking-wide bg-slate-100 hover:bg-slate-200 transition-all duration-300 active:scale-95"
+              >
+                NOT NOW
+              </button>
+            )}
           </motion.div>
         </motion.div>
       )}
