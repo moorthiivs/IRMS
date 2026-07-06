@@ -4,7 +4,6 @@ import {
   Divider, Card, Alert, Loader, Button
 } from '@mantine/core';
 import { Capacitor } from '@capacitor/core';
-import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import { Settings as SettingsIcon, ShieldAlert, Trash2, Info, Hash } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { settingsService } from '../services/settings.service';
@@ -31,7 +30,6 @@ export function Settings() {
   const [currentVersion, setCurrentVersion] = useState<string>('built-in');
   const [remoteVersion, setRemoteVersion] = useState<string | null>(null);
   const [hasUpdate, setHasUpdate] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
   const isNative = Capacitor.isNativePlatform();
 
   useEffect(() => {
@@ -258,7 +256,6 @@ export function Settings() {
                   size="xs" 
                   color="blue" 
                   onClick={handleManualUpdate}
-                  loading={isUpdating}
                 >
                   Update Available ({formatVersion(remoteVersion)})
                 </Button>
