@@ -11,18 +11,25 @@ import { useAuthStore } from '../store/auth-store';
 import { TableSkeleton } from '../components/TableSkeleton';
 
 export function Dashboard() {
-  const { user } = useAuthStore();
+  const { user, appMode } = useAuthStore();
   const navigate = useNavigate();
   
-  // Inspector State
+  // Inspector/Operator State
+  const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
   const [selectedPart, setSelectedPart] = useState<string | null>(null);
   const [selectedOp, setSelectedOp] = useState<string | null>(null);
+  const [selectedMachine, setSelectedMachine] = useState<string | null>(null);
 
   // Trend Chart State
   const [trendPart, setTrendPart] = useState<string | null>(null);
   const [trendOp, setTrendOp] = useState<string | null>(null);
   const [trendParam, setTrendParam] = useState<string | null>(null);
   const [trendDateRange, setTrendDateRange] = useState<[Date | null, Date | null]>([null, null]);
+
+  const { data: customers = [] } = useQuery({
+    queryKey: ['customers'],
+    queryFn: masterDataService.getCustomers,
+  });
 
   const { data: parts = [] } = useQuery({
     queryKey: ['parts'],
@@ -32,7 +39,7 @@ export function Dashboard() {
   const { data: operations = [] } = useQuery({
     queryKey: ['operations', selectedPart],
     queryFn: () => masterDataService.getOperationsByPart(selectedPart!),
-    enabled: !!selectedPart && user?.role === 'INSPECTOR',
+    enabled: !!selectedPart && (user?.role === 'INSPECTOR' || user?.role === 'OPERATOR' || user?.role === 'SUPERVISOR'),
   });
 
   const { data: trendOperations = [] } = useQuery({
@@ -70,46 +77,105 @@ export function Dashboard() {
   });
 
   const handleStartInspection = () => {
-    if (selectedPart && selectedOp) {
-      navigate(`/inspection?partId=${selectedPart}&opId=${selectedOp}`);
+    let params = `?partId=${selectedPart}`;
+    if (selectedOp) params += `&opId=${selectedOp}`;
+    if (selectedMachine) params += `&mcNo=${encodeURIComponent(selectedMachine)}`;
+
+    if (appMode === 'POKAYOKE' && selectedPart) {
+      navigate(`/pokayoke/entry${params}`);
+    } else if (selectedPart && selectedOp && selectedMachine) {
+      navigate(`/inspection${params}`);
     }
   };
 
-  if (user?.role === 'INSPECTOR') {
+  if (user?.role === 'INSPECTOR' || user?.role === 'OPERATOR' || user?.role === 'SUPERVISOR') {
+    // If the user has a customerId, use that; otherwise allow selection
+    const userCustomerId = user.customerId || selectedCustomer;
+    
+    // Filter parts and customers
+    const displayCustomers = user.customerId 
+      ? customers.filter(c => c.id === user.customerId)
+      : customers;
+      
+    const displayParts = userCustomerId
+      ? parts.filter(p => p.customerId === userCustomerId)
+      : [];
+
+    const activeCustomer = customers.find(c => c.id === userCustomerId);
+    const customerMachines = activeCustomer?.machines || [];
     return (
       <div className="max-w-2xl mx-auto mt-10">
-        <Title order={2} mb="md" ta="center">Start New Inspection</Title>
-        <Text c="dimmed" ta="center" mb="xl">Select the Part Number and Operation to begin entering readings.</Text>
+        <Title order={2} mb="md" ta="center">
+          {appMode === 'POKAYOKE' ? 'Start Poka Yoke Entry' : 'Start New Inspection'}
+        </Title>
+        <Text c="dimmed" ta="center" mb="xl">
+          {appMode === 'POKAYOKE' 
+            ? 'Select the Part Number to begin entering readings.' 
+            : 'Select the Part Number and Operation to begin entering readings.'}
+        </Text>
         
         <Paper withBorder p="xl" radius="md" shadow="sm">
+          {!user.customerId && (
+            <Select
+              label="Customer"
+              placeholder="Select Customer"
+              searchable
+              size="md"
+              data={displayCustomers.map(c => ({ value: c.id, label: c.name }))}
+              value={selectedCustomer}
+              onChange={(v) => { setSelectedCustomer(v); setSelectedPart(null); setSelectedOp(null); setSelectedMachine(null); }}
+              mb="lg"
+            />
+          )}
+
           <Select
             label="Part Number"
-            placeholder="Select Part from Master Data"
+            placeholder="Select Part"
             searchable
             size="md"
-            data={parts.map(p => ({ value: p.id, label: p.partNumber }))}
+            disabled={!userCustomerId}
+            data={displayParts.map(p => ({ value: p.id, label: p.partNumber }))}
             value={selectedPart}
-            onChange={(v) => { setSelectedPart(v); setSelectedOp(null); }}
-            mb="lg"
+            onChange={(v) => { setSelectedPart(v); setSelectedOp(null); setSelectedMachine(null); }}
+            mb={appMode === 'POKAYOKE' ? 'xl' : 'lg'}
           />
-          <Select
-            label="Operation"
-            placeholder="Select Operation"
-            size="md"
-            disabled={!selectedPart}
-            data={operations.map(o => ({ value: o.id, label: o.operationNumber }))}
-            value={selectedOp}
-            onChange={setSelectedOp}
-            mb="xl"
-          />
+
+          {appMode !== 'POKAYOKE' && (
+            <Select
+              label="Operation"
+              placeholder="Select Operation"
+              size="md"
+              disabled={!selectedPart}
+              data={operations.map(o => ({ value: o.id, label: o.operationNumber }))}
+              value={selectedOp}
+              onChange={setSelectedOp}
+              mb="lg"
+            />
+          )}
+
+          {appMode !== 'POKAYOKE' && (
+            <Select
+              label="Machine Number"
+              placeholder="Select Machine"
+              searchable
+              size="md"
+              disabled={!selectedOp || !selectedPart || customerMachines.length === 0}
+              data={customerMachines}
+              value={selectedMachine}
+              onChange={setSelectedMachine}
+              mb="xl"
+              description={customerMachines.length === 0 ? "No machines available for this customer" : ""}
+            />
+          )}
+
           <Button 
             fullWidth 
             size="lg" 
             leftSection={<Play size={20} />}
-            disabled={!selectedPart || !selectedOp}
+            disabled={appMode === 'POKAYOKE' ? (!selectedPart) : (!selectedPart || !selectedOp || !selectedMachine)}
             onClick={handleStartInspection}
           >
-            Start Inspection
+            {appMode === 'POKAYOKE' ? 'Start Entry' : 'Start Inspection'}
           </Button>
         </Paper>
       </div>

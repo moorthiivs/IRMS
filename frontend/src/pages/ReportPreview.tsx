@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { Title, Paper, Group, Button, Table, Text, Modal, Checkbox, Badge, TextInput, Textarea, Timeline, ThemeIcon, Autocomplete } from '@mantine/core';
+import { Title, Paper, Group, Button, Table, Text, Modal, Checkbox, Badge, TextInput, Textarea, Timeline, ThemeIcon, Autocomplete, Box } from '@mantine/core';
 import { Printer, ArrowLeft, FileCheck, Wrench, History, ArrowRight, Trash2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inspectionService } from '../services/inspection.service';
@@ -15,6 +15,7 @@ export function ReportPreview() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'ADMIN';
+  const canApprove = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
 
   const [approvalModalOpened, setApprovalModalOpened] = useState(false);
   const [reviewedChecked, setReviewedChecked] = useState(false);
@@ -174,7 +175,7 @@ export function ReportPreview() {
           >
             Audit Trail
           </Button>
-          {inspection.status === 'PASSED' && !inspection.approvedById && isAdmin && (
+          {inspection.status === 'PASSED' && !inspection.approvedById && canApprove && (
             <Button 
               color="violet"
               leftSection={<FileCheck size={16} />}
@@ -318,6 +319,27 @@ export function ReportPreview() {
                 <Table.Td><Text size="xs">{detail.parameter?.specText || '-'}</Text></Table.Td>
                 <Table.Td><Badge color="red" variant="light">{detail.observedValue}</Badge></Table.Td>
                 <Table.Td>
+                  {(() => {
+                    const getCorrectionStatus = (detail: any, val: string | undefined): 'PASS' | 'FAIL' | null => {
+                      if (val === undefined || val === null || val.trim() === '') return null;
+                      if (detail.parameter?.controlLimitMin !== null && detail.parameter?.controlLimitMax !== null) {
+                        const numVal = parseFloat(val);
+                        if (isNaN(numVal)) return 'FAIL';
+                        const EPSILON = 1e-6;
+                        if (numVal < detail.parameter.controlLimitMin - EPSILON || numVal > detail.parameter.controlLimitMax + EPSILON) return 'FAIL';
+                        return 'PASS';
+                      } else {
+                        const lower = val.toLowerCase().trim();
+                        if (lower === 'ng' || lower === 'fail') return 'FAIL';
+                        if (/\b(ng|fail|reject|rejected|not ok)\b/.test(lower)) return 'FAIL';
+                        return 'PASS';
+                      }
+                    };
+                    const status = getCorrectionStatus(detail, correctionValues[detail.id]);
+                    
+                    return (
+                      <Group gap="xs" wrap="nowrap">
+                        <Box style={{ flex: 1 }}>
                   {detail.parameter?.controlLimitMin !== null ? (
                     <TextInput
                       size="sm"
@@ -348,6 +370,15 @@ export function ReportPreview() {
                       data={['OK', 'NG']}
                     />
                   )}
+                        </Box>
+                        {status && (
+                          <Badge color={status === 'PASS' ? 'green' : 'red'} variant="filled" size="sm" style={{ flexShrink: 0 }}>
+                            {status}
+                          </Badge>
+                        )}
+                      </Group>
+                    );
+                  })()}
                 </Table.Td>
               </Table.Tr>
             ))}

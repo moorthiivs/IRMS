@@ -16,7 +16,8 @@ export const usersService = {
     username: string;
     password: string;
     name: string;
-    role: 'ADMIN' | 'INSPECTOR';
+    role: 'ADMIN' | 'INSPECTOR' | 'SUPERVISOR' | 'OPERATOR';
+    customerId?: string | null;
   }): Promise<User> => {
     const { data } = await api.post('/users', userData);
     return data;
@@ -25,7 +26,8 @@ export const usersService = {
   update: async (id: string, userData: {
     name?: string;
     password?: string;
-    role?: 'ADMIN' | 'INSPECTOR';
+    role?: 'ADMIN' | 'INSPECTOR' | 'SUPERVISOR' | 'OPERATOR';
+    customerId?: string | null;
     signature?: string;
   }): Promise<User> => {
     const { data } = await api.put(`/users/${id}`, userData);

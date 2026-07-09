@@ -107,7 +107,10 @@ export function ExcelUpload({ onUploadSuccess }: { onUploadSuccess?: () => void 
         <Button 
           variant="light" 
           leftSection={<Download size={16} />}
-          onClick={handleDownloadTemplate}
+          //onClick={handleDownloadTemplate}
+          component="a"
+          href="/upload_template.xlsx"
+          download
         >
           Download Template
         </Button>

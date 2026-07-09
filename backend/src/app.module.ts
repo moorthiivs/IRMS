@@ -5,6 +5,7 @@ import { MasterDataModule } from './modules/master-data/master-data.module';
 import { InspectionsModule } from './modules/inspections/inspections.module';
 import { UsersModule } from './modules/users/users.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { PokaYokeModule } from './modules/poka-yoke/poka-yoke.module';
 
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
@@ -21,6 +22,7 @@ import { join } from 'path';
     InspectionsModule,
     UsersModule,
     SettingsModule,
+    PokaYokeModule,
   ],
 })
 export class AppModule {}

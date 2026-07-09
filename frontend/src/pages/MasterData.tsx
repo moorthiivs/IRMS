@@ -13,10 +13,13 @@ import { masterDataService } from '../services/master-data.service';
 import { notifications } from '@mantine/notifications';
 import { PartWithOperations, InspectionParameter } from '../types';
 import { ExcelUpload } from './ExcelUpload';
+import { PokaYokeExcelUpload } from './pokayoke/PokaYokeExcelUpload';
 import { TableSkeleton } from '../components/TableSkeleton';
 import { modals } from '@mantine/modals';
+import { useAuthStore } from '../store/auth-store';
 
 export function MasterData() {
+  const { appMode } = useAuthStore();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [expandedParts, setExpandedParts] = useState<Set<string>>(new Set());
@@ -27,6 +30,8 @@ export function MasterData() {
   const [editPart, setEditPart] = useState<{ partId: string; operationId: string; opNum: string } | null>(null);
   const [editPartModal, setEditPartModal] = useState<PartWithOperations | null>(null);
   const [editOpModal, setEditOpModal] = useState<{ id: string, operationNumber: string, operationName: string } | null>(null);
+  const [editPokaYokeModal, setEditPokaYokeModal] = useState<any | null>(null);
+  const [editPokaYokePart, setEditPokaYokePart] = useState<{ partId: string; partNumber: string; items: any[] } | null>(null);
 
   const { data: customers = [] } = useQuery({
     queryKey: ['customers'],
@@ -113,6 +118,38 @@ export function MasterData() {
     },
   });
 
+  const updatePokaYokeItemMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string, data: any }) =>
+      masterDataService.updatePokaYokeItem(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parts-with-operations'] });
+      notifications.show({ title: 'Updated', message: 'Poka Yoke item updated successfully.', color: 'green' });
+      setEditPokaYokeModal(null);
+    },
+    onError: (err: any) => {
+      notifications.show({
+        title: 'Error',
+        message: err?.response?.data?.message || 'Failed to update item.',
+        color: 'red',
+      });
+    },
+  });
+
+  const deletePokaYokeItemMutation = useMutation({
+    mutationFn: (id: string) => masterDataService.deletePokaYokeItem(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parts-with-operations'] });
+      notifications.show({ title: 'Deleted', message: 'Poka Yoke item deleted successfully.', color: 'green' });
+    },
+    onError: (err: any) => {
+      notifications.show({
+        title: 'Error',
+        message: err?.response?.data?.message || 'Failed to delete item.',
+        color: 'red',
+      });
+    },
+  });
+
   const filteredParts = parts.filter(
     (p) => {
       const matchesSearch = p.partNumber.toLowerCase().includes(search.toLowerCase()) ||
@@ -134,7 +171,10 @@ export function MasterData() {
             Parts & Parameters
           </Tabs.Tab>
           <Tabs.Tab value="upload" leftSection={<UploadCloud size={16} />}>
-            Excel Upload
+            Inspection Excel Upload
+          </Tabs.Tab>
+          <Tabs.Tab value="pokayoke-upload" leftSection={<UploadCloud size={16} />}>
+            Poka Yoke Excel Upload
           </Tabs.Tab>
         </Tabs.List>
 
@@ -186,6 +226,7 @@ export function MasterData() {
                         <PartRow
                           key={part.id}
                           part={part}
+                          appMode={appMode}
                           expanded={expandedParts.has(part.id)}
                           onToggle={() => toggleExpand(part.id)}
                           onEditPart={() => setEditPartModal(part)}
@@ -223,6 +264,26 @@ export function MasterData() {
                           onEditOpDetails={(op) => {
                             setEditOpModal({ id: op.id, operationNumber: op.operationNumber, operationName: op.operationName });
                           }}
+                          onDeletePokaYokeItem={(itemId) => {
+                            modals.openConfirmModal({
+                              title: 'Delete Poka Yoke Item',
+                              centered: true,
+                              children: (
+                                <Text size="sm">
+                                  Are you sure you want to delete this item permanently? This action cannot be undone.
+                                </Text>
+                              ),
+                              labels: { confirm: 'Delete item', cancel: "Cancel" },
+                              confirmProps: { color: 'red' },
+                              onConfirm: () => deletePokaYokeItemMutation.mutate(itemId),
+                            });
+                          }}
+                          onEditPokaYokeItem={(item) => {
+                            setEditPokaYokeModal(item);
+                          }}
+                          onEditAllPokaYokeItems={(part) => {
+                            setEditPokaYokePart({ partId: part.id, partNumber: part.partNumber, items: part.pokaYokeItems || [] });
+                          }}
                         />
                       ))
                     )}
@@ -235,6 +296,10 @@ export function MasterData() {
 
         <Tabs.Panel value="upload">
           <ExcelUpload onUploadSuccess={() => setActiveTab('parts')} />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="pokayoke-upload">
+          <PokaYokeExcelUpload onUploadSuccess={() => setActiveTab('parts')} />
         </Tabs.Panel>
       </Tabs>
 
@@ -292,6 +357,35 @@ export function MasterData() {
           />
         )}
       </Modal>
+
+      {/* Poka Yoke Bulk Edit Modal */}
+      <Modal
+        opened={!!editPokaYokePart}
+        onClose={() => setEditPokaYokePart(null)}
+        title={`Edit Poka Yoke Items — Part ${editPokaYokePart?.partNumber}`}
+        fullScreen
+        transitionProps={{ transition: 'fade', duration: 200 }}
+        overlayProps={{ backgroundOpacity: 0.55, blur: 0 }}
+      >
+        {editPokaYokePart && (
+          <PokaYokeEditor
+          partId={editPokaYokePart.partId}
+          initialItems={editPokaYokePart.items}
+          onClose={() => setEditPokaYokePart(null)}
+          />
+        )}
+      </Modal>
+
+      <Modal opened={!!editPokaYokeModal} onClose={() => setEditPokaYokeModal(null)} title="Edit Poka Yoke Item">
+        {editPokaYokeModal && (
+          <EditPokaYokeForm
+            initialData={editPokaYokeModal}
+            onCancel={() => setEditPokaYokeModal(null)}
+            onSubmit={(data) => updatePokaYokeItemMutation.mutate({ id: editPokaYokeModal.id, data })}
+            isLoading={updatePokaYokeItemMutation.isPending}
+          />
+        )}
+      </Modal>
     </div>
   );
 }
@@ -299,6 +393,7 @@ export function MasterData() {
 // Part Row with expand/collapse
 function PartRow({
   part,
+  appMode,
   expanded,
   onToggle,
   onEditPart,
@@ -306,8 +401,12 @@ function PartRow({
   onDeleteOp,
   onEditOp,
   onEditOpDetails,
+  onDeletePokaYokeItem,
+  onEditPokaYokeItem,
+  onEditAllPokaYokeItems,
 }: {
-  part: PartWithOperations;
+  part: PartWithOperations & { pokaYokeItems?: any[] };
+  appMode: 'INSPECTION' | 'POKAYOKE';
   expanded: boolean;
   onToggle: () => void;
   onEditPart: () => void;
@@ -315,6 +414,9 @@ function PartRow({
   onDeleteOp: (operationId: string) => void;
   onEditOp: (operationId: string, opNum: string) => void;
   onEditOpDetails: (op: any) => void;
+  onDeletePokaYokeItem?: (itemId: string) => void;
+  onEditPokaYokeItem?: (item: any) => void;
+  onEditAllPokaYokeItems?: (part: any) => void;
 }) {
   return (
     <>
@@ -334,12 +436,25 @@ function PartRow({
           )}
         </Table.Td>
         <Table.Td>
-          <Badge variant="light" color="blue">
-            {part.operations.length} operation(s)
+          <Badge variant="light" color={appMode === 'POKAYOKE' ? 'orange' : 'blue'}>
+            {appMode === 'POKAYOKE'
+              ? `${part.pokaYokeItems?.length || 0} Poka Yoke item(s)`
+              : `${part.operations.length} operation(s)`}
           </Badge>
         </Table.Td>
         <Table.Td>
           <Group gap="xs" wrap="nowrap">
+            {appMode === 'POKAYOKE' && (
+              <Tooltip label="Edit Poka Yoke Items">
+                <ActionIcon
+                  variant="subtle"
+                  color="yellow"
+                  onClick={(e) => { e.stopPropagation(); onEditAllPokaYokeItems?.(part); }}
+                >
+                  <Database size={16} />
+                </ActionIcon>
+              </Tooltip>
+            )}
             <Tooltip label="Edit Part">
               <ActionIcon
                 variant="subtle"
@@ -366,57 +481,105 @@ function PartRow({
           <Table.Td colSpan={6} style={{ padding: 0 }}>
             <Collapse in={expanded}>
               <div style={{ padding: '8px 16px 16px 48px' }} className="bg-gray-50 dark:bg-[#1f2025]">
-                {part.operations.length === 0 ? (
-                  <Text size="sm" c="dimmed" py="sm">
-                    No operations assigned to this part.
-                  </Text>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table withTableBorder withColumnBorders style={{ minWidth: 600 }}>
-                      <Table.Thead>
-                        <Table.Tr>
-                          <Table.Th>Operation No</Table.Th>
-                          <Table.Th>Operation Name</Table.Th>
-                          <Table.Th>Parameters</Table.Th>
-                          <Table.Th style={{ minWidth: 150 }}>Actions</Table.Th>
-                        </Table.Tr>
-                      </Table.Thead>
-                      <Table.Tbody>
-                        {part.operations.map((op) => (
-                          <Table.Tr key={op.id}>
-                            <Table.Td>
-                              <Text fw={500}>{op.operationNumber}</Text>
-                            </Table.Td>
-                            <Table.Td>{op.operationName}</Table.Td>
-                            <Table.Td>
-                              <Badge variant="light" color="teal" size="sm">
-                                {op.parameterCount} parameter(s)
-                              </Badge>
-                            </Table.Td>
-                            <Table.Td>
-                              <Group gap="xs" wrap="nowrap">
-                                <Tooltip label="Edit Operation Details">
-                                  <ActionIcon variant="light" color="blue" onClick={() => onEditOpDetails(op)}>
-                                    <Edit size={16} />
-                                  </ActionIcon>
-                                </Tooltip>
-                                <Tooltip label="Edit Parameters">
-                                  <ActionIcon variant="light" color="teal" onClick={() => onEditOp(op.id, op.operationNumber)}>
-                                    <Database size={16} />
-                                  </ActionIcon>
-                                </Tooltip>
-                                <Tooltip label="Delete Operation">
-                                  <ActionIcon variant="light" color="red" onClick={() => onDeleteOp(op.id)}>
-                                    <Trash2 size={16} />
-                                  </ActionIcon>
-                                </Tooltip>
-                              </Group>
-                            </Table.Td>
+                {appMode === 'POKAYOKE' ? (
+                  part.pokaYokeItems && part.pokaYokeItems.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <Table withTableBorder withColumnBorders style={{ minWidth: 800 }}>
+                        <Table.Thead>
+                          <Table.Tr>
+                            <Table.Th>Operation</Table.Th>
+                            <Table.Th>Poka Yoke Item</Table.Th>
+                            <Table.Th>Checking Method</Table.Th>
+                            <Table.Th>Frequency</Table.Th>
+                            <Table.Th style={{ minWidth: 100 }}>Actions</Table.Th>
                           </Table.Tr>
-                        ))}
-                      </Table.Tbody>
-                    </Table>
-                  </div>
+                        </Table.Thead>
+                        <Table.Tbody>
+                          {part.pokaYokeItems.map((pyItem: any) => (
+                            <Table.Tr key={pyItem.id}>
+                              <Table.Td>{pyItem.operation}</Table.Td>
+                              <Table.Td>{pyItem.pokaYokeName}</Table.Td>
+                              <Table.Td>{pyItem.checkingMethod || '-'}</Table.Td>
+                              <Table.Td>
+                                <Badge variant="light" color="gray">{pyItem.frequency || 'N/A'}</Badge>
+                              </Table.Td>
+                              <Table.Td>
+                                <Group gap="xs" wrap="nowrap">
+                                  <Tooltip label="Edit Item">
+                                    <ActionIcon variant="light" color="blue" onClick={() => onEditPokaYokeItem?.(pyItem)}>
+                                      <Edit size={16} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                  <Tooltip label="Delete Item">
+                                    <ActionIcon variant="light" color="red" onClick={() => onDeletePokaYokeItem?.(pyItem.id)}>
+                                      <Trash2 size={16} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                </Group>
+                              </Table.Td>
+                            </Table.Tr>
+                          ))}
+                        </Table.Tbody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <Text size="sm" c="dimmed" py="sm">
+                      No Poka Yoke items assigned to this part.
+                    </Text>
+                  )
+                ) : (
+                  part.operations.length === 0 ? (
+                    <Text size="sm" c="dimmed" py="sm">
+                      No operations assigned to this part.
+                    </Text>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table withTableBorder withColumnBorders style={{ minWidth: 600 }}>
+                        <Table.Thead>
+                          <Table.Tr>
+                            <Table.Th>Operation No</Table.Th>
+                            <Table.Th>Operation Name</Table.Th>
+                            <Table.Th>Parameters</Table.Th>
+                            <Table.Th style={{ minWidth: 150 }}>Actions</Table.Th>
+                          </Table.Tr>
+                        </Table.Thead>
+                        <Table.Tbody>
+                          {part.operations.map((op) => (
+                            <Table.Tr key={op.id}>
+                              <Table.Td>
+                                <Text fw={500}>{op.operationNumber}</Text>
+                              </Table.Td>
+                              <Table.Td>{op.operationName}</Table.Td>
+                              <Table.Td>
+                                <Badge variant="light" color="teal" size="sm">
+                                  {op.parameterCount} parameter(s)
+                                </Badge>
+                              </Table.Td>
+                              <Table.Td>
+                                <Group gap="xs" wrap="nowrap">
+                                  <Tooltip label="Edit Operation Details">
+                                    <ActionIcon variant="light" color="blue" onClick={() => onEditOpDetails(op)}>
+                                      <Edit size={16} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                  <Tooltip label="Edit Parameters">
+                                    <ActionIcon variant="light" color="teal" onClick={() => onEditOp(op.id, op.operationNumber)}>
+                                      <Database size={16} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                  <Tooltip label="Delete Operation">
+                                    <ActionIcon variant="light" color="red" onClick={() => onDeleteOp(op.id)}>
+                                      <Trash2 size={16} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                </Group>
+                              </Table.Td>
+                            </Table.Tr>
+                          ))}
+                        </Table.Tbody>
+                      </Table>
+                    </div>
+                  )
                 )}
               </div>
             </Collapse>
@@ -816,5 +979,232 @@ function EditOpForm({
         </Button>
       </Group>
     </form>
+  );
+}
+
+// Edit Poka Yoke Form Component
+function EditPokaYokeForm({
+  initialData,
+  onCancel,
+  onSubmit,
+  isLoading,
+}: {
+  initialData: any;
+  onCancel: () => void;
+  onSubmit: (data: { pokaYokeName: string; checkingMethod: string; frequency: string; readingType: string }) => void;
+  isLoading: boolean;
+}) {
+  const [pokaYokeName, setPokaYokeName] = useState(initialData.pokaYokeName || '');
+  const [checkingMethod, setCheckingMethod] = useState(initialData.checkingMethod || '');
+  const [frequency, setFrequency] = useState(initialData.frequency || '');
+  const [readingType, setReadingType] = useState(initialData.readingType || 'number');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit({ pokaYokeName, checkingMethod, frequency, readingType });
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <TextInput
+        label="Poka Yoke Item Name"
+        value={pokaYokeName}
+        onChange={(e) => setPokaYokeName(e.target.value)}
+        required
+        mb="md"
+      />
+      <TextInput
+        label="Checking Method"
+        value={checkingMethod}
+        onChange={(e) => setCheckingMethod(e.target.value)}
+        mb="md"
+      />
+      <TextInput
+        label="Frequency"
+        value={frequency}
+        onChange={(e) => setFrequency(e.target.value)}
+        mb="md"
+      />
+      <Select
+        label="Reading Type"
+        value={readingType}
+        onChange={(v) => setReadingType(v || 'number')}
+        data={[
+          { value: 'number', label: 'Number (with Unit)' },
+          { value: 'text', label: 'Free Text' },
+          { value: 'ok_ng', label: 'OK/NG' }
+        ]}
+        allowDeselect={false}
+        mb="xl"
+      />
+      <Group justify="flex-end">
+        <Button variant="default" onClick={onCancel} disabled={isLoading}>
+          Cancel
+        </Button>
+        <Button type="submit" loading={isLoading}>
+          Save Changes
+        </Button>
+      </Group>
+    </form>
+  );
+}
+
+// Bulk Poka Yoke Editor Component
+function PokaYokeEditor({
+  partId,
+  initialItems,
+  onClose,
+}: {
+  partId: string;
+  initialItems: any[];
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [editedItems, setEditedItems] = useState<any[]>([...initialItems]);
+  const [dirty, setDirty] = useState(false);
+
+  const saveMutation = useMutation({
+    mutationFn: () => masterDataService.bulkUpdatePokaYokeItems(partId, editedItems),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parts-with-operations'] });
+      notifications.show({ title: 'Saved', message: 'Poka Yoke items updated successfully.', color: 'green' });
+      setDirty(false);
+      onClose();
+    },
+    onError: (err: any) => {
+      notifications.show({ title: 'Error', message: err?.response?.data?.message || 'Failed to save.', color: 'red' });
+    },
+  });
+
+  const updateField = (index: number, field: string, value: any) => {
+    setEditedItems((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+    setDirty(true);
+  };
+
+  const handleAddItem = () => {
+    setEditedItems((prev) => [
+      ...prev,
+      {
+        id: '', // Empty ID indicates new
+        operation: '',
+        pokaYokeName: '',
+        checkingMethod: '',
+        frequency: '',
+        readingType: 'number'
+      }
+    ]);
+    setDirty(true);
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setEditedItems((prev) => prev.filter((_, i) => i !== index));
+    setDirty(true);
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-white dark:bg-[#1a1b1e]">
+      <Group justify="space-between" p="md" style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}>
+        <Title order={3}>{editedItems.length} Poka Yoke Item(s)</Title>
+        <Group>
+          <Button variant="light" leftSection={<Plus size={16} />} onClick={handleAddItem}>
+            Add Item
+          </Button>
+          <Button
+            leftSection={<Save size={16} />}
+            disabled={!dirty}
+            onClick={() => saveMutation.mutate()}
+            loading={saveMutation.isPending}
+          >
+            Save Changes
+          </Button>
+          <Button variant="subtle" color="gray" onClick={onClose}>
+            <X size={16} /> Close
+          </Button>
+        </Group>
+      </Group>
+
+      <div className="flex-1 overflow-auto p-4">
+        <Table withTableBorder withColumnBorders striped>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th style={{ width: 60 }}>#</Table.Th>
+              <Table.Th style={{ minWidth: 120 }}>Operation</Table.Th>
+              <Table.Th style={{ minWidth: 200 }}>Poka Yoke Item</Table.Th>
+              <Table.Th style={{ minWidth: 150 }}>Checking Method</Table.Th>
+              <Table.Th style={{ minWidth: 120 }}>Frequency</Table.Th>
+              <Table.Th style={{ minWidth: 120 }}>Reading Type</Table.Th>
+              <Table.Th style={{ width: 60 }}>Actions</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {editedItems.map((item, idx) => (
+              <Table.Tr key={idx}>
+                <Table.Td>{idx + 1}</Table.Td>
+                <Table.Td>
+                  <TextInput
+                    value={item.operation}
+                    onChange={(e) => updateField(idx, 'operation', e.target.value)}
+                    size="xs"
+                    placeholder="e.g. OP10"
+                  />
+                </Table.Td>
+                <Table.Td>
+                  <TextInput
+                    value={item.pokaYokeName}
+                    onChange={(e) => updateField(idx, 'pokaYokeName', e.target.value)}
+                    size="xs"
+                    placeholder="Name"
+                  />
+                </Table.Td>
+                <Table.Td>
+                  <TextInput
+                    value={item.checkingMethod || ''}
+                    onChange={(e) => updateField(idx, 'checkingMethod', e.target.value)}
+                    size="xs"
+                    placeholder="Method"
+                  />
+                </Table.Td>
+                <Table.Td>
+                  <TextInput
+                    value={item.frequency || ''}
+                    onChange={(e) => updateField(idx, 'frequency', e.target.value)}
+                    size="xs"
+                    placeholder="Frequency"
+                  />
+                </Table.Td>
+                <Table.Td>
+                  <Select
+                    value={item.readingType || 'number'}
+                    onChange={(v) => updateField(idx, 'readingType', v || 'number')}
+                    data={[
+                      { value: 'number', label: 'Number' },
+                      { value: 'text', label: 'Text' },
+                      { value: 'ok_ng', label: 'OK/NG' }
+                    ]}
+                    size="xs"
+                    allowDeselect={false}
+                  />
+                </Table.Td>
+                <Table.Td>
+                  <Tooltip label="Delete Item">
+                    <ActionIcon
+                      variant="subtle"
+                      color="red"
+                      onClick={() => handleRemoveItem(idx)}
+                    >
+                      <Trash2 size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </div>
+    </div>
   );
 }

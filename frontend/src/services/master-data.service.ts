@@ -9,13 +9,13 @@ export const masterDataService = {
     return data;
   },
 
-  createCustomer: async (name: string, code?: string): Promise<Customer> => {
-    const { data } = await api.post('/master-data/customers', { name, code });
+  createCustomer: async (name: string, code?: string, machines?: string[]): Promise<Customer> => {
+    const { data } = await api.post('/master-data/customers', { name, code, machines });
     return data;
   },
 
-  updateCustomer: async (id: string, name: string, code?: string): Promise<Customer> => {
-    const { data } = await api.put(`/master-data/customers/${id}`, { name, code });
+  updateCustomer: async (id: string, name: string, code?: string, machines?: string[]): Promise<Customer> => {
+    const { data } = await api.put(`/master-data/customers/${id}`, { name, code, machines });
     return data;
   },
 
@@ -90,6 +90,23 @@ export const masterDataService = {
 
   updateParameters: async (parameters: Partial<InspectionParameter>[]): Promise<InspectionParameter[]> => {
     const { data } = await api.put('/master-data/parameters', { parameters });
+    return data;
+  },
+
+  // ── Poka Yoke Item Methods ──────────────────────────────────────────
+
+  bulkUpdatePokaYokeItems: async (partId: string, items: any[]): Promise<any> => {
+    const { data } = await api.put('/pokayoke/items/bulk', { partId, items });
+    return data;
+  },
+
+  updatePokaYokeItem: async (id: string, itemData: { pokaYokeName?: string; checkingMethod?: string; frequency?: string; readingType?: string }): Promise<any> => {
+    const { data } = await api.put(`/pokayoke/items/${id}`, itemData);
+    return data;
+  },
+
+  deletePokaYokeItem: async (id: string): Promise<any> => {
+    const { data } = await api.delete(`/pokayoke/items/${id}`);
     return data;
   },
 

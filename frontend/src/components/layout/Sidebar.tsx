@@ -18,21 +18,41 @@ interface SidebarProps {
 
 export function Sidebar({ onClose }: SidebarProps) {
   const location = useLocation();
-  const { user } = useAuthStore();
+  const { user, appMode } = useAuthStore();
   const isAdmin = user?.role === 'ADMIN';
+  const isSupervisor = user?.role === 'SUPERVISOR';
 
-  const links = [
+  const inspectionLinks = [
     { icon: LayoutDashboard, label: 'Dashboard', to: '/dashboard' },
     { icon: ClipboardCheck, label: 'Inspection Entry', to: '/inspection' },
     { icon: Save, label: 'Drafts', to: '/drafts' },
     { icon: FileText, label: 'Reports', to: '/reports' },
-    ...(isAdmin ? [
-      { icon: Building2, label: 'Customers', to: '/customers' },
-      { icon: Database, label: 'Master Data', to: '/master-data' },
-      { icon: Users, label: 'Users', to: '/users' },
-      { icon: Settings, label: 'Settings', to: '/settings' },
-    ] : []),
   ];
+
+  const pokaYokeLinks = [
+    { icon: LayoutDashboard, label: 'Dashboard', to: '/dashboard' },
+    { icon: ClipboardCheck, label: 'Poka Yoke Entry', to: '/pokayoke/entry' },
+    { icon: Save, label: 'Drafts', to: '/drafts' },
+    { icon: FileText, label: 'Poka Yoke Reports', to: '/pokayoke/reports' },
+  ];
+
+  const adminLinks = [];
+  if (isAdmin) {
+    adminLinks.push({ icon: Building2, label: 'Customers', to: '/customers' });
+  }
+  if (isAdmin || isSupervisor) {
+    adminLinks.push({ icon: Database, label: 'Master Data', to: '/master-data' });
+  }
+  if (isAdmin) {
+    adminLinks.push({ icon: Users, label: 'Users', to: '/users' });
+    adminLinks.push({ icon: Settings, label: 'Settings', to: '/settings' });
+  }
+
+  const links = [
+    ...(appMode === 'POKAYOKE' ? pokaYokeLinks : inspectionLinks),
+    ...adminLinks,
+  ];
+
 
   return (
     <Stack gap="xs">

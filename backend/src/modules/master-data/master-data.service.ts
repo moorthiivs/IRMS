@@ -9,8 +9,13 @@ export class MasterDataService {
 
   // ── Customer CRUD ──────────────────────────────────────────────
 
-  async getCustomers() {
+  async getCustomers(user?: any) {
+    const where: any = {};
+    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR') && user.customerId) {
+      where.id = user.customerId;
+    }
     return this.prisma.customer.findMany({
+      where,
       orderBy: { name: 'asc' },
       include: {
         _count: { select: { parts: true } },
@@ -18,16 +23,20 @@ export class MasterDataService {
     });
   }
 
-  async createCustomer(name: string, code?: string) {
+  async createCustomer(name: string, code?: string, machines?: string[]) {
     const existing = await this.prisma.customer.findUnique({ where: { name } });
     if (existing) throw new BadRequestException(`Customer "${name}" already exists.`);
-    return this.prisma.customer.create({ data: { name, code: code || null } });
+    return this.prisma.customer.create({ data: { name, code: code || null, machines: machines || [] } });
   }
 
-  async updateCustomer(id: string, name: string, code?: string) {
+  async updateCustomer(id: string, name: string, code?: string, machines?: string[]) {
+    const data: any = { name, code: code || null };
+    if (machines !== undefined) {
+      data.machines = machines;
+    }
     return this.prisma.customer.update({
       where: { id },
-      data: { name, code: code || null },
+      data,
     });
   }
 
@@ -80,15 +89,25 @@ export class MasterDataService {
 
   // ── Parts ─────────────────────────────────────────────────────
 
-  async getParts() {
+  async getParts(user?: any) {
+    const where: any = {};
+    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR') && user.customerId) {
+      where.customerId = user.customerId;
+    }
     return this.prisma.part.findMany({
+      where,
       orderBy: { partNumber: 'asc' },
       include: { customer: true },
     });
   }
 
-  async getPartsWithOperations() {
+  async getPartsWithOperations(user?: any) {
+    const where: any = {};
+    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR') && user.customerId) {
+      where.customerId = user.customerId;
+    }
     const parts = await this.prisma.part.findMany({
+      where,
       orderBy: { partNumber: 'asc' },
       include: {
         customer: true,
@@ -99,6 +118,9 @@ export class MasterDataService {
         },
         parameters: {
           select: { id: true, operationId: true },
+        },
+        pokaYokeItems: {
+          select: { id: true, operation: true, pokaYokeName: true, checkingMethod: true, frequency: true, readingType: true },
         },
       },
     });
@@ -117,6 +139,7 @@ export class MasterDataService {
           (p) => p.operationId === po.operation.id,
         ).length,
       })),
+      pokaYokeItems: part.pokaYokeItems
     }));
   }
 
@@ -134,15 +157,23 @@ export class MasterDataService {
     const txCount = await this.prisma.inspectionTransaction.count({
       where: { partId },
     });
+    const pyTxCount = await this.prisma.pokaYokeTransaction.count({
+      where: { partId },
+    });
+    const totalTx = txCount + pyTxCount;
 
-    if (txCount > 0 && policy === 'strict') {
+    if (totalTx > 0 && policy === 'strict') {
       throw new BadRequestException(
-        `Cannot delete this part because it has ${txCount} inspection record(s). Change Deletion Policy to "Cascade" in Settings to force delete.`,
+        `Cannot delete this part because it has ${totalTx} inspection/poka-yoke record(s). Change Deletion Policy to "Cascade" in Settings to force delete.`,
       );
     }
 
+    // Always delete drafts as they shouldn't block deletion
+    await this.prisma.inspectionDraft.deleteMany({ where: { partId } });
+    await this.prisma.pokaYokeDraft.deleteMany({ where: { partId } });
+
     // If cascade, delete transactions first
-    if (txCount > 0 && policy === 'cascade') {
+    if (totalTx > 0 && policy === 'cascade') {
       // Delete details first, then transactions
       await this.prisma.inspectionDetail.deleteMany({
         where: { transaction: { partId } },
@@ -150,11 +181,19 @@ export class MasterDataService {
       await this.prisma.inspectionTransaction.deleteMany({
         where: { partId },
       });
+      
+      await this.prisma.pokaYokeDetail.deleteMany({
+        where: { transaction: { partId } },
+      });
+      await this.prisma.pokaYokeTransaction.deleteMany({
+        where: { partId },
+      });
     }
 
-    // Delete parameters, partOperations, then the part (cascade handles params via schema)
+    // Delete parameters, partOperations, pokaYokeItems, then the part
     await this.prisma.inspectionParameter.deleteMany({ where: { partId } });
     await this.prisma.partOperation.deleteMany({ where: { partId } });
+    await this.prisma.pokaYokeItem.deleteMany({ where: { partId } });
     await this.prisma.part.delete({ where: { id: partId } });
 
     return { message: 'Part deleted successfully.' };

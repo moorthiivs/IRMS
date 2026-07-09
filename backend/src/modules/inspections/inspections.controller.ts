@@ -43,12 +43,13 @@ export class InspectionsController {
   }
 
   @Get('dashboard')
-  async getDashboard() {
-    return this.inspectionsService.getDashboardData();
+  async getDashboard(@Request() req) {
+    return this.inspectionsService.getDashboardData(req.user);
   }
 
   @Get('recent')
   async getRecent(
+    @Request() req,
     @Query('status') status?: string,
     @Query('approval') approval?: string,
     @Query('date') date?: string,
@@ -56,28 +57,30 @@ export class InspectionsController {
     @Query('partId') partId?: string,
     @Query('operationId') operationId?: string,
   ) {
-    return this.inspectionsService.getRecentInspections(status, approval, date, shiftId, partId, operationId);
+    return this.inspectionsService.getRecentInspections(req.user, status, approval, date, shiftId, partId, operationId);
   }
 
   @Get('trends')
   async getTrends(
+    @Request() req,
     @Query('partId') partId: string,
     @Query('operationId') operationId: string,
     @Query('days') days?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    return this.inspectionsService.getTrends(partId, operationId, days ? parseInt(days, 10) : 7, startDate, endDate);
+    return this.inspectionsService.getTrends(req.user, partId, operationId, days ? parseInt(days, 10) : 7, startDate, endDate);
   }
 
   @Get('daily')
   async getDailyReport(
+    @Request() req,
     @Query('partId') partId: string,
     @Query('operationId') operationId: string,
     @Query('mcNo') mcNo?: string,
     @Query('date') date?: string,
   ) {
-    return this.inspectionsService.getDailyReport(partId, operationId, mcNo, date);
+    return this.inspectionsService.getDailyReport(req.user, partId, operationId, mcNo, date);
   }
 
   @Get(':id')
@@ -90,7 +93,7 @@ export class InspectionsController {
     return this.inspectionsService.getAuditTrail(id);
   }
 
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @Patch(':id/approve')
   async approve(@Param('id') id: string, @Request() req) {
     return this.inspectionsService.approveInspection(id, req.user.id);

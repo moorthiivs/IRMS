@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { 
   Title, Paper, Table, Group, Badge, ActionIcon, 
   Tabs, Select, TextInput, Button, Text, Tooltip,
-  Modal, Checkbox, SimpleGrid, Textarea, Timeline, ThemeIcon, Autocomplete, LoadingOverlay
+  Modal, Checkbox, SimpleGrid, Textarea, Timeline, ThemeIcon, Autocomplete, LoadingOverlay, Stack, Box
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -16,72 +16,26 @@ import { modals } from '@mantine/modals';
 import { TableSkeleton } from '../components/TableSkeleton';
 import { CorrectionEntry } from '../types';
 
-function parseSpecText(specText: string | null): [string, string, string] {
-  if (!specText) return ['', '', ''];
-  const text = specText.trim();
-  
-  // 1. ± symbol
-  if (text.includes('±')) {
-    const parts = text.split('±');
-    return [parts[0].trim(), '±', parts[1].trim()];
-  }
-  
-  // 2. regex for ± / + / - / ~
-  const plusMinusRegex = /^([A-Za-z0-9\.\,\s\-]+)\s*([\+\-~])\s*([A-Za-z0-9\.\(\)\s\-]+)$/;
-  const match = text.match(plusMinusRegex);
-  if (match) {
-    return [match[1].trim(), match[2].trim(), match[3].trim()];
-  }
-  
-  // 3. Check for "ref"
-  if (text.toLowerCase().includes('ref')) {
-    const index = text.toLowerCase().indexOf('ref');
-    const firstPart = text.substring(0, index).trim();
-    const thirdPart = text.substring(index + 3).trim();
-    return [firstPart, 'ref', thirdPart];
-  }
-  
-  // 4. Check for "max." or "max" or "min." or "min"
-  const maxMinRegex = /^(.*?)\s*(max\.?|min\.?)$/i;
-  const maxMinMatch = text.match(maxMinRegex);
-  if (maxMinMatch) {
-    return [maxMinMatch[1].trim(), '', maxMinMatch[2].trim()];
-  }
-  
-  // 5. Check for "Rz 6.300" type format
-  const rzRegex = /^(Rz)\s+([0-9\.]+)$/i;
-  const rzMatch = text.match(rzRegex);
-  if (rzMatch) {
-    return [rzMatch[1].trim(), '', rzMatch[2].trim()];
-  }
-
-  // 6. Check for ending parenthesis (e.g. 133.60,12.40 (0.20))
-  const parenRegex = /^([A-Za-z0-9\.\,\s\-]+)\s*(\([A-Za-z0-9\.\,\s\-]+\))$/;
-  const parenMatch = text.match(parenRegex);
-  if (parenMatch) {
-    return [parenMatch[1].trim(), '', parenMatch[2].trim()];
-  }
-  
-  return [text, '', ''];
-}
-
 export function Reports() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'ADMIN';
+  const canApprove = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
   const [activeTab, setActiveTab] = useState<string | null>('history');
   const [searchParams, setSearchParams] = useSearchParams();
   const filterStatus = searchParams.get('status');
   const filterApproval = searchParams.get('approval');
 
   // History Tab filter states
+  const [historyCustomer, setHistoryCustomer] = useState<string | null>(null);
   const [historyDate, setHistoryDate] = useState<Date | null>(null);
   const [historyShift, setHistoryShift] = useState<string | null>(null);
   const [historyPart, setHistoryPart] = useState<string | null>(null);
   const [historyOp, setHistoryOp] = useState<string | null>(null);
 
   // Report filter states
+  const [reportCustomer, setReportCustomer] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [selectedPart, setSelectedPart] = useState<string | null>(null);
   const [selectedOp, setSelectedOp] = useState<string | null>(null);
@@ -134,6 +88,16 @@ export function Reports() {
     queryKey: ['parts'],
     queryFn: masterDataService.getParts
   });
+
+  const { data: customers = [] } = useQuery({
+    queryKey: ['customers'],
+    queryFn: masterDataService.getCustomers
+  });
+
+  const filteredHistoryParts = historyCustomer ? parts.filter((p: any) => p.customerId === historyCustomer) : parts;
+  const filteredReportParts = reportCustomer ? parts.filter((p: any) => p.customerId === reportCustomer) : parts;
+  const reportCustomerData = customers.find((c: any) => c.id === reportCustomer);
+  const reportCustomerMachines = reportCustomerData?.machines || [];
 
   const { data: operations = [] } = useQuery({
     queryKey: ['operations', selectedPart],
@@ -599,14 +563,26 @@ export function Reports() {
 
   // Feature 2: Group Recent Inspections
   const groupedRecent = useMemo(() => {
-    const groups: Record<string, any[]> = {};
+    const groups: Record<string, any> = {};
     recent.forEach((tx: any) => {
       const dateStr = new Date(tx.inspectionTimestamp).toLocaleDateString();
+      const custName = tx.part?.customer?.name || 'Unknown Customer';
       const partNo = tx.part?.partNumber || 'Unknown Part';
       const opNo = tx.operation?.operationNumber || 'Unknown Op';
-      const key = `${partNo} / ${opNo} - ${dateStr}`;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(tx);
+      const mcNo = tx.mcNo || 'Unknown M/C';
+
+      const l1 = `${custName} / ${partNo} - ${dateStr}`;
+      const l2 = opNo;
+      const l3 = mcNo;
+
+      if (!groups[l1]) groups[l1] = { txs: [], children: {} };
+      groups[l1].txs.push(tx);
+
+      if (!groups[l1].children[l2]) groups[l1].children[l2] = { txs: [], children: {} };
+      groups[l1].children[l2].txs.push(tx);
+
+      if (!groups[l1].children[l2].children[l3]) groups[l1].children[l2].children[l3] = { txs: [] };
+      groups[l1].children[l2].children[l3].txs.push(tx);
     });
     return groups;
   }, [recent]);
@@ -708,62 +684,9 @@ export function Reports() {
 
         <Tabs.Panel value="history">
           <Paper withBorder p="sm" radius="md" mb="md" className="bg-blue-50 dark:bg-[#25262b]">
-            <Group justify="space-between" align="center">
-              <Group gap="xs" align="center">
-                <Text size="sm" fw={600} mr="sm">Filters:</Text>
-                <DatePickerInput
-                  placeholder="Select Date"
-                  size="xs"
-                  value={historyDate}
-                  onChange={setHistoryDate}
-                  clearable
-                  style={{ width: 140 }}
-                />
-                <Select
-                  placeholder="Select Shift"
-                  size="xs"
-                  data={shifts.map((s: any) => ({ value: s.id, label: s.name }))}
-                  value={historyShift}
-                  onChange={setHistoryShift}
-                  clearable
-                  style={{ width: 120 }}
-                />
-                <Select
-                  placeholder="Select Part"
-                  size="xs"
-                  data={parts.map(p => ({ value: p.id, label: p.partNumber }))}
-                  value={historyPart}
-                  onChange={(v) => { setHistoryPart(v); setHistoryOp(null); }}
-                  clearable
-                  style={{ width: 140 }}
-                />
-                <Select
-                  placeholder="Select Operation"
-                  size="xs"
-                  data={historyOperations.map(o => ({ value: o.id, label: o.operationNumber }))}
-                  value={historyOp}
-                  onChange={setHistoryOp}
-                  clearable
-                  disabled={!historyPart}
-                  style={{ width: 140 }}
-                />
-                {filterStatus && (
-                  <Badge color={filterStatus === 'PASSED' ? 'green' : 'red'} variant="filled">
-                    {filterStatus}
-                  </Badge>
-                )}
-                {filterApproval === 'pending' && (
-                  <Badge color="violet" variant="filled">
-                    Approval Pending
-                  </Badge>
-                )}
-              </Group>
-              <Group gap="xs">
-                {selectedIds.length > 0 && (
-                  <Button size="xs" color="red" variant="filled" onClick={handleBulkDelete} loading={bulkDeletePending}>
-                    Bulk Delete Selected ({selectedIds.length})
-                  </Button>
-                )}
+            <Stack gap="md">
+              <Group justify="space-between" align="center">
+                <Text size="sm" fw={600}>Filters:</Text>
                 <Button
                   size="xs"
                   variant="subtle"
@@ -778,14 +701,83 @@ export function Reports() {
                   Clear Filters
                 </Button>
               </Group>
-            </Group>
+
+              <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 5 }} spacing="xs">
+                <DatePickerInput
+                  placeholder="Select Date"
+                  size="xs"
+                  value={historyDate}
+                  onChange={setHistoryDate}
+                  clearable
+                  className="w-full"
+                />
+                <Select
+                  placeholder="Select Shift"
+                  size="xs"
+                  data={shifts.map((s: any) => ({ value: s.id, label: s.name }))}
+                  value={historyShift}
+                  onChange={setHistoryShift}
+                  clearable
+                  className="w-full"
+                />
+                <Select
+                  placeholder="Select Customer"
+                  size="xs"
+                  data={customers.map((c: any) => ({ value: c.id, label: c.name }))}
+                  value={historyCustomer}
+                  onChange={(v) => { setHistoryCustomer(v); setHistoryPart(null); setHistoryOp(null); }}
+                  clearable
+                  className="w-full"
+                />
+                <Select
+                  placeholder="Select Part"
+                  size="xs"
+                  data={filteredHistoryParts.map((p: any) => ({ value: p.id, label: p.partNumber }))}
+                  value={historyPart}
+                  onChange={(v) => { setHistoryPart(v); setHistoryOp(null); }}
+                  clearable
+                  className="w-full"
+                />
+                <Select
+                  placeholder="Select Operation"
+                  size="xs"
+                  data={historyOperations.map(o => ({ value: o.id, label: o.operationNumber }))}
+                  value={historyOp}
+                  onChange={setHistoryOp}
+                  clearable
+                  disabled={!historyPart}
+                  className="w-full"
+                />
+              </SimpleGrid>
+
+              <Group justify="space-between">
+                <Group gap="xs">
+                  {filterStatus && (
+                    <Badge color={filterStatus === 'PASSED' ? 'green' : 'red'} variant="filled">
+                      {filterStatus}
+                    </Badge>
+                  )}
+                  {filterApproval === 'pending' && (
+                    <Badge color="violet" variant="filled">
+                      Approval Pending
+                    </Badge>
+                  )}
+                </Group>
+
+                {selectedIds.length > 0 && (
+                  <Button size="xs" color="red" variant="filled" onClick={handleBulkDelete} loading={bulkDeletePending}>
+                    Bulk Delete Selected ({selectedIds.length})
+                  </Button>
+                )}
+              </Group>
+            </Stack>
           </Paper>
           <Paper withBorder p="md" radius="md">
             {isRecentLoading ? (
               <TableSkeleton rows={8} />
             ) : (
               <div className="overflow-x-auto">
-                <Table striped highlightOnHover style={{ minWidth: 900 }}>
+                  <Table striped highlightOnHover withTableBorder withColumnBorders style={{ minWidth: 900 }}>
                 <Table.Thead>
                   <Table.Tr>
                     <Table.Th style={{ width: 40 }}>
@@ -804,144 +796,239 @@ export function Reports() {
                     <Table.Th style={{ minWidth: 120 }}>Actions</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
-                <Table.Tbody>
-                  {Object.entries(groupedRecent).map(([groupKey, groupTxs]) => (
-                    <React.Fragment key={groupKey}>
+                    <Table.Tbody>
+                      {Object.entries(groupedRecent).map(([l1Key, l1Node]: [string, any]) => (
+                        <React.Fragment key={l1Key}>
+                          {/* LEVEL 1: Customer / Part */}
                       <Table.Tr 
-                        className={`font-bold cursor-pointer transition-colors ${groupTxs.some((tx: any) => tx.status === 'REJECTED') ? 'bg-orange-50 hover:bg-orange-100 dark:bg-orange-900/20 dark:hover:bg-orange-900/30 text-orange-900 dark:text-orange-200 border-b border-orange-200 dark:border-orange-900/50' : 'bg-white hover:bg-gray-50 dark:bg-[#1a1b1e] dark:hover:bg-[#25262b] border-b border-gray-200 dark:border-gray-800 shadow-sm'}`}
-                        onClick={() => toggleGroup(groupKey)}
+                            className={`cursor-pointer transition-colors ${l1Node.txs.some((tx: any) => tx.status === 'REJECTED') ? 'bg-orange-100 hover:bg-orange-200 text-orange-900' : 'bg-slate-700 hover:bg-slate-800 text-white border-b-2 border-slate-900'}`}
+                            onClick={() => toggleGroup(l1Key)}
                       >
                         <Table.Td colSpan={8} className="py-3">
                           <Group justify="space-between">
-                            <Group gap="sm">
-                              <ThemeIcon variant="light" color={expandedGroups[groupKey] ? "blue" : "gray"} size="sm" radius="xl">
-                                {expandedGroups[groupKey] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                              </ThemeIcon>
-                              <Text size="sm" fw={700} className="text-gray-800 dark:text-gray-200">
-                                {groupKey}
+                                <Group gap="md">
+                                  <ActionIcon
+                                    variant="transparent"
+                                    color={l1Node.txs.some((tx: any) => tx.status === 'REJECTED') ? "orange" : "gray.1"}
+                                  >
+                                    {expandedGroups[l1Key] ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                                  </ActionIcon>
+                                  <Checkbox
+                                    color="blue"
+                                    checked={l1Node.txs.length > 0 && l1Node.txs.every((t: any) => selectedIds.includes(t.id))}
+                                    indeterminate={l1Node.txs.some((t: any) => selectedIds.includes(t.id)) && !l1Node.txs.every((t: any) => selectedIds.includes(t.id))}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      handleSelectAll(e.currentTarget.checked, l1Node.txs.map((t: any) => t.id));
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                  <Text size="md" fw={700}>
+                                    {l1Key}
                               </Text>
-                              <Badge size="xs" variant="filled" color="gray" radius="sm">{groupTxs.length} item{groupTxs.length > 1 ? 's' : ''}</Badge>
+                                  <Badge size="sm" variant="white" color="dark" radius="sm">{l1Node.txs.length} item{l1Node.txs.length > 1 ? 's' : ''}</Badge>
                             </Group>
                             <Group>
-                              {groupTxs.some((tx: any) => tx.status === 'REJECTED') ? (
-                                <Badge color="orange" variant="filled" size="sm">
+                                  {l1Node.txs.some((tx: any) => tx.status === 'REJECTED') ? (
+                                    <Badge color="red" variant="filled" size="sm">
                                   Take Action Required
                                 </Badge>
-                              ) : isAdmin && groupTxs.some((tx: any) => tx.status === 'PASSED' && !tx.approvedById) ? (
-                                <Button
-                                  size="compact-xs"
-                                  color="green"
-                                  onClick={(e) => { e.stopPropagation(); handleBulkApprove(groupTxs); }}
+                                  ) : null}
+                                </Group>
+                              </Group>
+                            </Table.Td>
+                          </Table.Tr>
+
+                          {expandedGroups[l1Key] && Object.entries(l1Node.children).map(([l2Key, l2Node]: [string, any]) => {
+                            const l2FullKey = `${l1Key}-${l2Key}`;
+                            return (
+                              <React.Fragment key={l2FullKey}>
+                                {/* LEVEL 2: Operation */}
+                                <Table.Tr
+                                  className="cursor-pointer bg-slate-200 hover:bg-slate-300 dark:bg-[#25262b] border-b border-slate-300 dark:border-gray-800"
+                                  onClick={() => toggleGroup(l2FullKey)}
                                 >
-                                  Bulk Approve
-                                </Button>
-                              ) : null}
-                            </Group>
-                          </Group>
-                        </Table.Td>
-                      </Table.Tr>
-                      {expandedGroups[groupKey] && groupTxs.map((item: any) => (
-                        <Table.Tr 
-                          key={item.id} 
-                          className={
-                            selectedIds.includes(item.id) ? 'bg-red-50/40 dark:bg-red-900/20' 
-                            : item.status === 'REJECTED' ? 'bg-orange-50/40 dark:bg-orange-900/20' 
-                            : 'bg-slate-50/50 hover:bg-slate-100/80 dark:bg-[#25262b]/50 dark:hover:bg-[#2c2e33]/80 transition-colors'
-                          }
-                        >
-                          <Table.Td className="border-l-[3px] border-l-blue-400 pl-4">
-                            <Checkbox
-                              checked={selectedIds.includes(item.id)}
-                              onChange={(e) => {
-                                if (e.currentTarget.checked) {
-                                  setSelectedIds(prev => [...prev, item.id]);
-                                } else {
-                                  setSelectedIds(prev => prev.filter(id => id !== item.id));
-                                }
-                              }}
-                            />
-                          </Table.Td>
-                          <Table.Td>
-                            <Text size="sm" fw={500}>{new Date(item.inspectionTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-                          </Table.Td>
-                          <Table.Td>
-                            <Text size="xs" c="dimmed">{item.part?.partNumber} / {item.operation?.operationNumber}</Text>
-                          </Table.Td>
-                          <Table.Td>
-                            <Badge variant="light" color="gray" size="sm">{item.shift?.name}</Badge>
-                          </Table.Td>
-                          <Table.Td>
-                            <Text size="sm" fw={500}>{item.lotNumber || '-'}</Text>
-                          </Table.Td>
-                          <Table.Td>
-                            <Text size="sm" c="dimmed">{item.inspector?.name}</Text>
-                          </Table.Td>
-                          <Table.Td>
-                            <Badge 
-                              color={item.status === 'PASSED' ? 'teal' : 'red'} 
-                              variant={item.status === 'PASSED' ? 'light' : 'filled'}
-                              size="sm"
-                            >
-                              {item.status}
-                            </Badge>
-                          </Table.Td>
-                          <Table.Td>
-                            <Group gap="xs" wrap="nowrap">
-                              <ActionIcon variant="light" color="blue" onClick={() => navigate(`/reports/${item.id}`)}>
-                                <Eye size={16} />
-                              </ActionIcon>
-                              <ActionIcon variant="light" color="gray" onClick={() => navigate(`/reports/${item.id}`)}>
-                                <Printer size={16} />
-                              </ActionIcon>
-                              {item.status === 'REJECTED' && (
-                                <Tooltip label="Take Action — Correct failed values">
-                                  <ActionIcon
-                                    variant="light"
-                                    color="orange"
-                                    onClick={() => handleTakeAction(item.id)}
-                                  >
-                                    <Wrench size={16} />
-                                  </ActionIcon>
-                                </Tooltip>
-                              )}
-                              <Tooltip label="View Audit Trail">
-                                <ActionIcon
-                                  variant="light"
-                                  color="cyan"
-                                  onClick={() => handleViewAuditTrail(item.id)}
-                                >
-                                  <History size={16} />
-                                </ActionIcon>
-                              </Tooltip>
-                              {item.status === 'PASSED' && !item.approvedById && isAdmin && (
-                                <ActionIcon
-                                  variant="light"
-                                  color="violet"
-                                  onClick={() => {
-                                    setApprovalId(item.id);
-                                    setReviewedChecked(false);
-                                  }}
-                                  loading={approveMutation.isPending && approvalId === item.id}
-                                >
-                                  <FileCheck size={16} />
-                                </ActionIcon>
-                              )}
-                              {isAdmin && (
-                                <Tooltip label="Delete Report">
-                                  <ActionIcon
-                                    variant="light"
-                                    color="red"
-                                    onClick={() => handleDelete(item.id)}
-                                    loading={deleteMutation.isPending}
-                                  >
-                                    <Trash2 size={16} />
-                                  </ActionIcon>
-                                </Tooltip>
-                              )}
-                            </Group>
-                          </Table.Td>
-                        </Table.Tr>
-                      ))}
+                                  <Table.Td colSpan={8} className="py-2.5">
+                                    <Group justify="space-between" ml="xl">
+                                      <Group gap="md">
+                                        <ActionIcon variant="transparent" color="dark">
+                                          {expandedGroups[l2FullKey] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                        </ActionIcon>
+                                        <Checkbox
+                                          size="sm"
+                                          color="blue"
+                                          checked={l2Node.txs.length > 0 && l2Node.txs.every((t: any) => selectedIds.includes(t.id))}
+                                          indeterminate={l2Node.txs.some((t: any) => selectedIds.includes(t.id)) && !l2Node.txs.every((t: any) => selectedIds.includes(t.id))}
+                                          onChange={(e) => {
+                                            e.stopPropagation();
+                                            handleSelectAll(e.currentTarget.checked, l2Node.txs.map((t: any) => t.id));
+                                          }}
+                                          onClick={(e) => e.stopPropagation()}
+                                        />
+                                        <Text size="sm" fw={600} className="text-slate-800 dark:text-gray-200">
+                                          Operation: {l2Key}
+                                        </Text>
+                                        <Badge size="xs" variant="filled" color="gray">{l2Node.txs.length} items</Badge>
+                                      </Group>
+                                    </Group>
+                                  </Table.Td>
+                                </Table.Tr>
+
+                                {expandedGroups[l2FullKey] && Object.entries(l2Node.children).map(([l3Key, l3Node]: [string, any]) => {
+                                  const l3FullKey = `${l2FullKey}-${l3Key}`;
+                                  return (
+                                    <React.Fragment key={l3FullKey}>
+                                      {/* LEVEL 3: M/C No */}
+                                      <Table.Tr
+                                        className="cursor-pointer bg-slate-100 hover:bg-slate-200 dark:bg-[#2c2e33]/50 border-b border-slate-200 dark:border-gray-800/50"
+                                        onClick={() => toggleGroup(l3FullKey)}
+                                      >
+                                        <Table.Td colSpan={8} className="py-2">
+                                          <Group justify="space-between" ml={60}>
+                                            <Group gap="md">
+                                              <ActionIcon variant="transparent" color="dark">
+                                                {expandedGroups[l3FullKey] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                              </ActionIcon>
+                                              <Checkbox
+                                                size="sm"
+                                                color="blue"
+                                                checked={l3Node.txs.length > 0 && l3Node.txs.every((t: any) => selectedIds.includes(t.id))}
+                                                indeterminate={l3Node.txs.some((t: any) => selectedIds.includes(t.id)) && !l3Node.txs.every((t: any) => selectedIds.includes(t.id))}
+                                                onChange={(e) => {
+                                                  e.stopPropagation();
+                                                  handleSelectAll(e.currentTarget.checked, l3Node.txs.map((t: any) => t.id));
+                                                }}
+                                                onClick={(e) => e.stopPropagation()}
+                                              />
+                                              <Text size="sm" fw={600} className="text-slate-700 dark:text-gray-300">
+                                                M/C No: {l3Key}
+                                              </Text>
+                                              <Badge size="xs" variant="outline" color="gray">{l3Node.txs.length} items</Badge>
+                                            </Group>
+                                            <Group>
+                                              {canApprove && l3Node.txs.some((tx: any) => tx.status === 'PASSED' && !tx.approvedById) ? (
+                                                <Button
+                                                  size="compact-xs"
+                                                  color="green"
+                                                  onClick={(e) => { e.stopPropagation(); handleBulkApprove(l3Node.txs); }}
+                                                >
+                                                  Bulk Approve
+                                                </Button>
+                                              ) : null}
+                                            </Group>
+                                          </Group>
+                                        </Table.Td>
+                                      </Table.Tr>
+
+                                      {expandedGroups[l3FullKey] && l3Node.txs.map((item: any) => (
+                                        <Table.Tr
+                                          key={item.id}
+                                          className={
+                                            selectedIds.includes(item.id) ? 'bg-red-50/40 dark:bg-red-900/20'
+                                              : item.status === 'REJECTED' ? 'bg-orange-50/40 dark:bg-orange-900/20' 
+                                            : 'bg-white hover:bg-slate-50 dark:bg-[#1a1b1e] dark:hover:bg-[#25262b] transition-colors'
+                                      }
+                                    >
+                                      {/* No artificial padding left here to preserve table columns */}
+                                      <Table.Td>
+                                        <Checkbox
+                                          checked={selectedIds.includes(item.id)}
+                                          onChange={(e) => {
+                                            if (e.currentTarget.checked) {
+                                              setSelectedIds(prev => [...prev, item.id]);
+                                            } else {
+                                              setSelectedIds(prev => prev.filter(id => id !== item.id));
+                                            }
+                                          }}
+                                        />
+                                      </Table.Td>
+                                      <Table.Td>
+                                        <Text size="sm" fw={500}>{new Date(item.inspectionTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                                      </Table.Td>
+                                      <Table.Td>
+                                        <Text size="xs" c="dimmed">{item.part?.partNumber} / {item.operation?.operationNumber}</Text>
+                                      </Table.Td>
+                                      <Table.Td>
+                                        <Badge variant="light" color="gray" size="sm">{item.shift?.name}</Badge>
+                                      </Table.Td>
+                                      <Table.Td>
+                                        <Text size="sm" fw={500}>{item.lotNumber || '-'}</Text>
+                                      </Table.Td>
+                                      <Table.Td>
+                                        <Text size="sm" c="dimmed">{item.inspector?.name}</Text>
+                                      </Table.Td>
+                                      <Table.Td>
+                                        <Badge
+                                          color={item.status === 'PASSED' ? 'teal' : 'red'}
+                                          variant={item.status === 'PASSED' ? 'light' : 'filled'}
+                                          size="sm"
+                                        >
+                                          {item.status}
+                                        </Badge>
+                                      </Table.Td>
+                                      <Table.Td>
+                                        <Group gap="xs" wrap="nowrap">
+                                          <ActionIcon variant="light" color="blue" onClick={() => navigate(`/reports/${item.id}`)}>
+                                            <Eye size={16} />
+                                          </ActionIcon>
+                                          <ActionIcon variant="light" color="gray" onClick={() => navigate(`/reports/${item.id}`)}>
+                                            <Printer size={16} />
+                                          </ActionIcon>
+                                          {item.status === 'REJECTED' && (
+                                            <Tooltip label="Take Action — Correct failed values">
+                                              <ActionIcon
+                                                variant="light"
+                                                color="orange"
+                                                onClick={() => handleTakeAction(item.id)}
+                                              >
+                                                <Wrench size={16} />
+                                              </ActionIcon>
+                                            </Tooltip>
+                                          )}
+                                          <Tooltip label="View Audit Trail">
+                                            <ActionIcon
+                                              variant="light"
+                                              color="cyan"
+                                              onClick={() => handleViewAuditTrail(item.id)}
+                                            >
+                                              <History size={16} />
+                                            </ActionIcon>
+                                          </Tooltip>
+                                          {item.status === 'PASSED' && !item.approvedById && canApprove && (
+                                            <ActionIcon
+                                              variant="light"
+                                              color="violet"
+                                              onClick={() => {
+                                                setApprovalId(item.id);
+                                                setReviewedChecked(false);
+                                              }}
+                                              loading={approveMutation.isPending && approvalId === item.id}
+                                            >
+                                              <FileCheck size={16} />
+                                            </ActionIcon>
+                                          )}
+                                          {isAdmin && (
+                                            <Tooltip label="Delete Report">
+                                              <ActionIcon
+                                                variant="light"
+                                                color="red"
+                                                onClick={() => handleDelete(item.id)}
+                                                loading={deleteMutation.isPending}
+                                              >
+                                                <Trash2 size={16} />
+                                              </ActionIcon>
+                                            </Tooltip>
+                                          )}
+                                        </Group>
+                                      </Table.Td>
+                                    </Table.Tr>
+                                  ))}
+                                    </React.Fragment>
+                                  )
+                                })}
+                              </React.Fragment>
+                            )
+                          })}
                     </React.Fragment>
                   ))}
                 </Table.Tbody>
@@ -953,7 +1040,7 @@ export function Reports() {
 
         <Tabs.Panel value="daily">
           <Paper withBorder p="md" radius="md" mb="lg">
-            <SimpleGrid cols={{ base: 1, sm: 2, lg: 5 }} spacing="md">
+            <SimpleGrid cols={{ base: 1, sm: 2, lg: 6 }} spacing="md">
               <DatePickerInput
                 label="Select Date"
                 placeholder="Select date"
@@ -962,9 +1049,17 @@ export function Reports() {
                 clearable
               />
               <Select
+                label="Customer"
+                placeholder="Select Customer"
+                data={customers.map((c: any) => ({ value: c.id, label: c.name }))}
+                value={reportCustomer}
+                onChange={(v) => { setReportCustomer(v); setSelectedPart(null); setSelectedOp(null); }}
+                clearable
+              />
+              <Select
                 label="Part Number"
                 placeholder="Select Part"
-                data={parts.map(p => ({ value: p.id, label: p.partNumber }))}
+                data={filteredReportParts.map((p: any) => ({ value: p.id, label: p.partNumber }))}
                 value={selectedPart}
                 onChange={(v) => { setSelectedPart(v); setSelectedOp(null); }}
               />
@@ -976,11 +1071,15 @@ export function Reports() {
                 value={selectedOp}
                 onChange={setSelectedOp}
               />
-              <TextInput
+              <Select
                 label="M/C No. (Optional)"
-                placeholder="e.g. CNC80"
+                placeholder="Select M/C"
+                data={reportCustomerMachines.length > 0 ? reportCustomerMachines : (selectedMcNo ? [selectedMcNo] : [])}
                 value={selectedMcNo}
-                onChange={(e) => setSelectedMcNo(e.target.value)}
+                onChange={(val) => setSelectedMcNo(val || '')}
+                clearable
+                searchable
+                disabled={!reportCustomer || reportCustomerMachines.length === 0}
               />
               <Button 
                 onClick={handleGenerateReport} 
@@ -1071,6 +1170,27 @@ export function Reports() {
                       <Badge color="red" variant="light">{detail.observedValue}</Badge>
                     </Table.Td>
                     <Table.Td>
+                      {(() => {
+                        const getCorrectionStatus = (detail: any, val: string | undefined): 'PASS' | 'FAIL' | null => {
+                          if (val === undefined || val === null || val.trim() === '') return null;
+                          if (detail.parameter?.controlLimitMin !== null && detail.parameter?.controlLimitMax !== null) {
+                            const numVal = parseFloat(val);
+                            if (isNaN(numVal)) return 'FAIL';
+                            const EPSILON = 1e-6;
+                            if (numVal < detail.parameter.controlLimitMin - EPSILON || numVal > detail.parameter.controlLimitMax + EPSILON) return 'FAIL';
+                            return 'PASS';
+                          } else {
+                            const lower = val.toLowerCase().trim();
+                            if (lower === 'ng' || lower === 'fail') return 'FAIL';
+                            if (/\b(ng|fail|reject|rejected|not ok)\b/.test(lower)) return 'FAIL';
+                            return 'PASS';
+                          }
+                        };
+                        const status = getCorrectionStatus(detail, correctionValues[detail.id]);
+                        
+                        return (
+                          <Group gap="xs" wrap="nowrap">
+                            <Box style={{ flex: 1 }}>
                       {detail.parameter?.controlLimitMin !== null ? (
                         <TextInput
                           size="sm"
@@ -1101,6 +1221,15 @@ export function Reports() {
                           data={['OK', 'NG']}
                         />
                       )}
+                            </Box>
+                            {status && (
+                              <Badge color={status === 'PASS' ? 'green' : 'red'} variant="filled" size="sm" style={{ flexShrink: 0 }}>
+                                {status}
+                              </Badge>
+                            )}
+                          </Group>
+                        );
+                      })()}
                     </Table.Td>
                   </Table.Tr>
                 ))}
@@ -1213,15 +1342,14 @@ export function Reports() {
                     </div>
                   </div>
                   <div className="mt-3 space-y-1 text-xs">
-                    <div>Date : <span className="font-bold underline pl-1">{selectedDate ? selectedDate.toLocaleDateString() : 'N/A'}</span></div>
-                    <div>M/c No. : <span className="font-bold underline pl-1">{selectedMcNo || dailyReportTransactions[0]?.mcNo || 'N/A'}</span></div>
+                    <div>Date : <span className="font-bold pl-1">{selectedDate ? selectedDate.toLocaleDateString() : 'N/A'}</span></div>
+                    <div>M/c No. : <span className="font-bold pl-1">{selectedMcNo || dailyReportTransactions[0]?.mcNo || 'N/A'}</span></div>
                   </div>
                 </div>
                 
                 {/* Middle section: Check sheet title and reference */}
                 <div className="w-[38%] p-3 border-r border-black flex flex-col justify-center items-center text-center">
                   <Text size="lg" fw={900} className="text-black uppercase font-black tracking-wide leading-tight">Inspector - Inprocess Check Sheet</Text>
-                  <Text size="xs" className="text-gray-600 font-medium mt-1">TAF / P2 / 9.1B JAN-2012 (Rev date: 06.10.2023)</Text>
                 </div>
 
                 {/* Right section: Part number, Part name, Operation number */}
@@ -1251,7 +1379,7 @@ export function Reports() {
                     <Table.Th rowSpan={2} className="text-center">Description</Table.Th>
                     {/* Specification header spans 3 columns and 2 rows */}
                     <Table.Th rowSpan={2} className="text-center">MISP NO/SC</Table.Th>
-                    <Table.Th colSpan={3} rowSpan={2} style={{ width: 170 }} className="text-center">Specification (Standard)</Table.Th>
+                    <Table.Th rowSpan={2} style={{ width: 170 }} className="text-center">Specification (Standard)</Table.Th>
                     <Table.Th rowSpan={2} style={{ width: 120 }} className="text-center">Method of checking</Table.Th>
                     <Table.Th rowSpan={2} style={{ width: 90 }} className="text-center">Freq. of Inspn.</Table.Th>
                     <Table.Th colSpan={2} className="text-center bg-blue-50 dark:bg-blue-900/20 text-black dark:text-white">1st Shift (Shift A)</Table.Th>
@@ -1269,17 +1397,13 @@ export function Reports() {
                 </Table.Thead>
                 <Table.Tbody className="text-xs">
                   {parameters.map((param, index) => {
-                    const [nominal, symbol, limit] = parseSpecText(param.specText || `${param.nominalValue} ±${param.upperTolerance}`);
                     return (
                       <Table.Tr key={param.id} className="hover:bg-gray-50/30 dark:hover:bg-gray-800/30">
                         <Table.Td className="text-center font-semibold">{String(index + 1).padStart(2, '0')}</Table.Td>
                         <Table.Td className="font-semibold">{param.parameterName}</Table.Td>
                         
-                        {/* 3 Split Specification Columns */}
                         <Table.Td className="font-semibold">{param.class}</Table.Td>
-                        <Table.Td style={{ width: 80 }} className="text-right pr-2 font-medium">{nominal || '-'}</Table.Td>
-                        <Table.Td style={{ width: 30 }} className="text-center font-bold text-gray-500">{symbol}</Table.Td>
-                        <Table.Td style={{ width: 60 }} className="text-left pl-2 font-medium">{limit}</Table.Td>
+                        <Table.Td className="text-center font-medium">{param.specText || `${param.nominalValue} ±${param.upperTolerance}`}</Table.Td>
                         
                         <Table.Td className="text-center">{param.methodOfChecking || '-'}</Table.Td>
                         <Table.Td className="text-center font-medium">{param.freqOfInspn || '-'}</Table.Td>
@@ -1309,7 +1433,7 @@ export function Reports() {
                   
                   {/* Status / Verifications Footer */}
                   <Table.Tr className="bg-gray-50/50 dark:bg-[#25262b]/50 font-bold">
-                    <Table.Td colSpan={8} className="text-right pr-4 font-bold">OK / NG</Table.Td>
+                    <Table.Td colSpan={6} className="text-right pr-4 font-bold">OK / NG</Table.Td>
                     <Table.Td className="text-center">{getFooterStatus('Shift A', '1 Half')}</Table.Td>
                     <Table.Td className="text-center">{getFooterStatus('Shift A', '2 Half')}</Table.Td>
                     <Table.Td className="text-center">{getFooterStatus('Shift B', '1 Half')}</Table.Td>
@@ -1318,7 +1442,7 @@ export function Reports() {
                     <Table.Td className="text-center">{getFooterStatus('Shift C', '2 Half')}</Table.Td>
                   </Table.Tr>
                   <Table.Tr className="bg-gray-50/50 dark:bg-[#25262b]/50 font-medium">
-                    <Table.Td colSpan={8} className="text-right pr-4">Inspected by</Table.Td>
+                    <Table.Td colSpan={6} className="text-right pr-4">Inspected by</Table.Td>
                     <Table.Td className="text-center text-[10px]">
                       {getInspectorSignature('Shift A', '1 Half') || getFooterInspector('Shift A', '1 Half')}
                     </Table.Td>
@@ -1339,23 +1463,23 @@ export function Reports() {
                     </Table.Td>
                   </Table.Tr>
                   <Table.Tr className="bg-gray-50/50 dark:bg-[#25262b]/50 font-medium">
-                    <Table.Td colSpan={8} className="text-right pr-4">Checked by</Table.Td>
+                    <Table.Td colSpan={6} className="text-right pr-4">Checked by</Table.Td>
                     <Table.Td colSpan={2} className="text-center text-[10px]">{getApproverSignature('Shift A')}</Table.Td>
                     <Table.Td colSpan={2} className="text-center text-[10px]">{getApproverSignature('Shift B')}</Table.Td>
                     <Table.Td colSpan={2} className="text-center text-[10px]">{getApproverSignature('Shift C')}</Table.Td>
                   </Table.Tr>
                   <Table.Tr className="bg-gray-50/50 dark:bg-[#25262b]/50 font-medium print:hidden">
-                    <Table.Td colSpan={8} className="text-right pr-4">Approve</Table.Td>
+                    <Table.Td colSpan={6} className="text-right pr-4">Approve</Table.Td>
                     {['Shift A', 'Shift B', 'Shift C'].map(shift => {
                       const unapproved = getUnapprovedTxIds(shift);
                       return (
                         <Table.Td key={shift} colSpan={2} className="text-center">
-                          {isAdmin && unapproved.length > 0 ? (
+                          {canApprove && unapproved.length > 0 ? (
                             <Tooltip label={`Approve ${unapproved.length} transaction(s) for ${shift}`}>
                               <Button
                                 size="compact-xs"
-                                color="green"
-                                variant="light"
+                                color="red"
+                                variant="filled"
                                 leftSection={<CheckCircle size={12} />}
                                 loading={approveMutation.isPending}
                                 onClick={() => {
@@ -1374,7 +1498,7 @@ export function Reports() {
                                   });
                                 }}
                               >
-                                Approve
+                                Approve Needed
                               </Button>
                             </Tooltip>
                           ) : unapproved.length === 0 && dailyReportTransactions.some(t => t.shift?.name === shift) ? (
@@ -1405,6 +1529,7 @@ export function Reports() {
                       </Table.Tr>
                     </Table.Tbody>
                   </Table>
+                  <Text size="xs" className="text-gray-500 font-medium mt-2 block text-left">TAF / P2 / 9.1B JAN-2012 (Rev date: 06.10.2023)</Text>
                 </div>
                 
                 <div style={{ width: '55%' }}>

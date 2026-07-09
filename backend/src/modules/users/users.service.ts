@@ -15,6 +15,8 @@ export class UsersService {
         name: true,
         role: true,
         signature: true,
+        customerId: true,
+        customer: { select: { name: true } },
         createdAt: true,
         updatedAt: true,
       },
@@ -31,6 +33,8 @@ export class UsersService {
         name: true,
         role: true,
         signature: true,
+        customerId: true,
+        customer: { select: { name: true } },
         createdAt: true,
         updatedAt: true,
       },
@@ -54,6 +58,7 @@ export class UsersService {
         passwordHash,
         name: dto.name,
         role: dto.role || 'INSPECTOR',
+        customerId: dto.customerId,
       },
       select: {
         id: true,
@@ -73,6 +78,7 @@ export class UsersService {
     if (dto.name) updateData.name = dto.name;
     if (dto.role) updateData.role = dto.role;
     if (dto.signature !== undefined) updateData.signature = dto.signature;
+    if (dto.customerId !== undefined) updateData.customerId = dto.customerId;
     if (dto.password) {
       updateData.passwordHash = await bcrypt.hash(dto.password, 10);
     }
@@ -86,6 +92,8 @@ export class UsersService {
         name: true,
         role: true,
         signature: true,
+        customerId: true,
+        customer: { select: { name: true } },
         createdAt: true,
         updatedAt: true,
       },

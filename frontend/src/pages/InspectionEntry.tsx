@@ -13,14 +13,18 @@ import { Check, Save, X, AlertTriangle, Info, Filter, SkipForward } from 'lucide
 import { masterDataService } from '../services/master-data.service';
 import { inspectionService } from '../services/inspection.service';
 import { settingsService } from '../services/settings.service';
-import { CheckCircle2, XCircle, ArrowLeft, ArrowRight } from 'lucide-react';
 import { TableSkeleton } from '../components/TableSkeleton';
+import { useAuthStore } from '../store/auth-store';
+import { CheckCircle2, XCircle, ArrowLeft, ArrowRight } from 'lucide-react';
 
 export function InspectionEntry() {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryPart = searchParams.get('partId');
   const queryOp = searchParams.get('opId');
+  const queryMcNo = searchParams.get('mcNo') || '';
 
+  const { user } = useAuthStore();
+  const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
   const [selectedPart, setSelectedPart] = useState<string | null>(queryPart);
   const [selectedOp, setSelectedOp] = useState<string | null>(queryOp);
   const [submitting, setSubmitting] = useState(false);
@@ -93,10 +97,22 @@ export function InspectionEntry() {
     }
   }, [selectedPart, selectedOp, drafts]);
 
+  const { data: customers = [] } = useQuery({
+    queryKey: ['customers'],
+    queryFn: masterDataService.getCustomers
+  });
+
   const { data: parts = [] } = useQuery({
     queryKey: ['parts'],
     queryFn: masterDataService.getParts
   });
+
+  const userCustomerId = user?.customerId || selectedCustomer;
+  const displayParts = userCustomerId
+    ? parts.filter(p => p.customerId === userCustomerId)
+    : [];
+  const activeCustomer = customers.find(c => c.id === userCustomerId);
+  const customerMachines = activeCustomer?.machines || [];
 
   const { data: operations = [] } = useQuery({
     queryKey: ['operations', selectedPart],
@@ -125,6 +141,7 @@ export function InspectionEntry() {
     enabled: !!selectedPart && !!selectedOp
   });
 
+
   // Feature 6: Derive unique method-of-checking values for filter
   const uniqueMethods = useMemo(() => {
     const methods = parameters
@@ -149,8 +166,8 @@ export function InspectionEntry() {
     let totalCount = 0;
     let currentShiftCount = 0;
 
-    todayTransactions.forEach(tx => {
-      tx.details?.forEach(d => {
+    mcTransactions.forEach((tx: any) => {
+      tx.details?.forEach((d: any) => {
         if (d.parameterId === param.id) {
           totalCount++;
           if (tx.shiftId === form.values.shiftId) {
@@ -167,15 +184,26 @@ export function InspectionEntry() {
   };
 
   const isShiftWiseAlreadyRecorded = (param: typeof parameters[0]): boolean => {
-    if (param.frequencyUnit === 'day' || param.frequencyUnit === 'Day-wise') return false;
-    const freq = String(param.freqOfInspn || '').toLowerCase().trim();
-    if (freq !== '1') return false;
+    const freqStr = String(param.freqOfInspn || '').toLowerCase().trim();
+    const isImplicitShiftWise = freqStr === '1' || freqStr === 'once per shift' || freqStr === '1no/shift' || freqStr === '1/shift' || freqStr === '1/day';
     
-    // Check if THIS shift already has a reading for this param
-    return todayTransactions.some(tx =>
-      tx.shiftId === form.values.shiftId &&
-      tx.details?.some(d => d.parameterId === param.id)
-    );
+    if (param.frequencyUnit !== 'shift' && param.frequencyUnit !== 'Shift-wise' && !isImplicitShiftWise) return false;
+    
+    const parsedFreq = parseInt(freqStr.replace(/\D/g, ''), 10);
+    const targetFreq = (!isNaN(parsedFreq) && parsedFreq > 0) ? parsedFreq : 1;
+
+    let currentShiftCount = 0;
+    mcTransactions.forEach((tx: any) => {
+      if (tx.shiftId === form.values.shiftId) {
+        tx.details?.forEach((d: any) => {
+          if (d.parameterId === param.id) {
+            currentShiftCount++;
+          }
+        });
+      }
+    });
+
+    return currentShiftCount >= targetFreq;
   };
 
   const getReadingCount = (freq: string | null | undefined, interval: string, frequencyUnit?: string): number => {
@@ -208,7 +236,7 @@ export function InspectionEntry() {
   const form = useForm({
     initialValues: {
       shiftId: '',
-      mcNo: '',
+      mcNo: queryMcNo,
       lotNumber: '',
       intervalName: '1 Half',
       remarks: '',
@@ -216,21 +244,26 @@ export function InspectionEntry() {
     }
   });
 
+  const mcTransactions = useMemo(() => {
+    if (!form.values.mcNo) return [];
+    return todayTransactions.filter((t: any) => t.mcNo === form.values.mcNo);
+  }, [todayTransactions, form.values.mcNo]);
+
   // Feature 4: Auto-advance interval when shift is selected
   useEffect(() => {
-    if (form.values.shiftId && todayTransactions.length > 0) {
-      const has1Half = todayTransactions.some(
-        t => t.shiftId === form.values.shiftId && t.intervalName === '1 Half'
+    if (form.values.shiftId && mcTransactions.length > 0) {
+      const has1Half = mcTransactions.some(
+        (t: any) => t.shiftId === form.values.shiftId && t.intervalName === '1 Half'
       );
-      const has2Half = todayTransactions.some(
-        t => t.shiftId === form.values.shiftId && t.intervalName === '2 Half'
+      const has2Half = mcTransactions.some(
+        (t: any) => t.shiftId === form.values.shiftId && t.intervalName === '2 Half'
       );
       
       if (has1Half && !has2Half) {
         form.setFieldValue('intervalName', '2 Half');
       }
     }
-  }, [form.values.shiftId, todayTransactions]);
+  }, [form.values.shiftId, mcTransactions]);
 
   // Calculate PASS/FAIL status for a parameter
   const getStatus = (param: typeof parameters[0]): 'PASS' | 'FAIL' | null => {
@@ -292,8 +325,8 @@ export function InspectionEntry() {
     }
 
     // Duplicate submission check
-    const isDuplicate = todayTransactions.some(
-      (t) => t.shiftId === values.shiftId && t.intervalName === values.intervalName
+    const isDuplicate = mcTransactions.some(
+      (t: any) => t.shiftId === values.shiftId && t.intervalName === values.intervalName
     );
     if (isDuplicate) {
       notifications.show({
@@ -310,8 +343,9 @@ export function InspectionEntry() {
       const details: { parameterId: string; observedValue: string }[] = [];
 
       for (const param of parameters) {
-        // Feature 3: Skip day-wise already-recorded params
+        // Feature 3: Skip day-wise and shift-wise already-recorded params
         if (isDayWiseAlreadyRecorded(param)) continue;
+        if (isShiftWiseAlreadyRecorded(param)) continue;
 
         const count = getReadingCount(param.freqOfInspn, values.intervalName, param.frequencyUnit);
         for (let idx = 0; idx < count; idx++) {
@@ -367,10 +401,18 @@ export function InspectionEntry() {
       
       refetchTodayTransactions();
       refetchDrafts();
+      setSelectedCustomer(null);
       setSelectedPart(null);
       setSelectedOp(null);
       setSearchParams({});
-      form.reset();
+      form.initialize({
+        shiftId: '',
+        mcNo: '',
+        lotNumber: '',
+        intervalName: '1 Half',
+        remarks: '',
+        readings: {},
+      });
       
     } catch (err: any) {
       notifications.show({
@@ -391,8 +433,8 @@ export function InspectionEntry() {
   const completedParamsCount = statuses.filter(s => s !== null).length;
   const completionPercentage = parameters.length > 0 ? Math.round((completedParamsCount / parameters.length) * 100) : 0;
   const totalReadingsEntered = Object.values(form.values.readings).filter(v => v !== undefined && v !== null && String(v).trim() !== '').length;
-  const isDuplicate = todayTransactions.some(
-    (t) => t.shiftId === form.values.shiftId && t.intervalName === form.values.intervalName
+  const isDuplicate = mcTransactions.some(
+    (t: any) => t.shiftId === form.values.shiftId && t.intervalName === form.values.intervalName
   );
 
   // Feature 2: Find first pending parameter index (in filtered list) for mobile "Jump to Pending"
@@ -405,7 +447,7 @@ export function InspectionEntry() {
 
   // Feature 4: Check if 1st half is already done for selected shift
   const is1HalfDone = form.values.shiftId
-    ? todayTransactions.some(t => t.shiftId === form.values.shiftId && t.intervalName === '1 Half')
+    ? mcTransactions.some((t: any) => t.shiftId === form.values.shiftId && t.intervalName === '1 Half')
     : false;
 
   // Lot number disable condition (updated for Feature 1)
@@ -416,10 +458,26 @@ export function InspectionEntry() {
       <Title order={2} mb="lg">Inspection Entry</Title>
 
       <Paper withBorder p="md" radius="md" mb="xl">
-        <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 6 }} spacing="md">
+        <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="md">
+          {!user?.customerId && (
+            <Select
+              label="Customer"
+              data={customers.map(c => ({ value: c.id, label: c.name }))}
+              value={selectedCustomer}
+              onChange={(val) => {
+                setSelectedCustomer(val);
+                setSelectedPart(null);
+                setSelectedOp(null);
+                setActiveStep(0);
+                form.setFieldValue('mcNo', '');
+              }}
+              placeholder="Select Customer"
+              searchable
+            />
+          )}
           <Select
             label="Part Number"
-            data={parts.map(p => ({ value: p.id, label: p.partNumber }))}
+            data={displayParts.map(p => ({ value: p.id, label: p.partNumber }))}
             value={selectedPart}
             onChange={(val) => {
               setSelectedPart(val);
@@ -428,6 +486,7 @@ export function InspectionEntry() {
               setMethodFilter(null);
               setSearchParams(val ? { partId: val } : {});
             }}
+            disabled={!userCustomerId}
             placeholder="Select Part Number"
             searchable
           />
@@ -448,10 +507,19 @@ export function InspectionEntry() {
             searchable
           />
           <Select
+            label="M/C No"
+            placeholder="Machine Number"
+            data={customerMachines}
+            required
+            withAsterisk
+            disabled={customerMachines.length === 0}
+            {...form.getInputProps('mcNo')}
+          />
+          <Select
             label="Shift"
             data={shifts.map(s => {
-              const shiftHas1Half = todayTransactions.some(t => t.shiftId === s.id && t.intervalName === '1 Half');
-              const shiftHas2Half = todayTransactions.some(t => t.shiftId === s.id && t.intervalName === '2 Half');
+              const shiftHas1Half = mcTransactions.some((t: any) => t.shiftId === s.id && t.intervalName === '1 Half');
+              const shiftHas2Half = mcTransactions.some((t: any) => t.shiftId === s.id && t.intervalName === '2 Half');
               const isCompleted = shiftHas1Half && shiftHas2Half;
               
               return { 
@@ -463,13 +531,6 @@ export function InspectionEntry() {
             required
             disabled={!selectedPart || !selectedOp}
             {...form.getInputProps('shiftId')}
-          />
-          <TextInput
-            label="M/C No"
-            placeholder="Machine Number"
-            required
-            disabled={!selectedPart || !selectedOp}
-            {...form.getInputProps('mcNo')}
           />
           <Select
             label="Interval"
@@ -510,12 +571,14 @@ export function InspectionEntry() {
           <Group justify="space-between" align="flex-start" className="flex-col sm:flex-row">
             <div className="mb-2 sm:mb-0">
               <Text size="sm" fw={700} c="blue.8">Today's Inspection Completion Status</Text>
-              <Text size="xs" c="dimmed">Completed vs pending shifts and intervals for today</Text>
+              <Text size="xs" c="dimmed">
+                {form.values.mcNo ? `Completed vs pending shifts and intervals for M/C ${form.values.mcNo}` : 'Select a M/C No to view completion status'}
+              </Text>
             </div>
             <Group gap="xs" className="w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-              {['Shift A', 'Shift B', 'Shift C'].map(shiftName => {
-                const has1Half = todayTransactions.some(t => t.shift?.name === shiftName && t.intervalName === '1 Half');
-                const has2Half = todayTransactions.some(t => t.shift?.name === shiftName && t.intervalName === '2 Half');
+              {form.values.mcNo && ['Shift A', 'Shift B', 'Shift C'].map(shiftName => {
+                const has1Half = mcTransactions.some((t: any) => t.shift?.name === shiftName && t.intervalName === '1 Half');
+                const has2Half = mcTransactions.some((t: any) => t.shift?.name === shiftName && t.intervalName === '2 Half');
                 
                 let color = 'gray';
                 let statusText = 'Pending';
@@ -594,20 +657,27 @@ export function InspectionEntry() {
                   const status = getStatus(param);
                   const count = getReadingCount(param.freqOfInspn, form.values.intervalName, param.frequencyUnit);
                   const dayWiseRecorded = isDayWiseAlreadyRecorded(param);
+                  const shiftWiseRecorded = isShiftWiseAlreadyRecorded(param);
+                  const alreadyRecorded = dayWiseRecorded || shiftWiseRecorded;
+
                   return (
-                    <Table.Tr key={param.id} className={dayWiseRecorded ? 'opacity-60' : ''}>
+                    <Table.Tr key={param.id} className={alreadyRecorded ? 'opacity-70 bg-gray-50 dark:bg-[#1A1B1E]' : ''}>
                       <Table.Td className="font-medium">
                         <div>{param.parameterName}</div>
                         <div className="text-xs text-gray-500 font-normal">Freq: {param.freqOfInspn || 'N/A'}</div>
-                        {dayWiseRecorded && (
-                          <Badge color="teal" size="xs" variant="light" mt={2}>Already recorded today</Badge>
+                        {alreadyRecorded && (
+                          <Badge color="teal" size="xs" variant="light" mt={2}>
+                            {dayWiseRecorded ? 'Already recorded today' : 'Recorded in earlier interval'}
+                          </Badge>
                         )}
                       </Table.Td>
                       <Table.Td>{param.specText || `${param.nominalValue} +${param.upperTolerance}/${param.lowerTolerance}`}</Table.Td>
                       <Table.Td>{param.methodOfChecking}</Table.Td>
                       <Table.Td style={{ minWidth: 220 }}>
-                        {dayWiseRecorded ? (
-                          <Text size="sm" c="dimmed" fs="italic">Recorded in earlier shift</Text>
+                        {alreadyRecorded ? (
+                          <Text size="sm" c="dimmed" fs="italic">
+                            {dayWiseRecorded ? 'Recorded in earlier shift' : 'Recorded in earlier interval'}
+                          </Text>
                         ) : (
                           <div className="flex flex-col gap-2">
                             {Array.from({ length: count }).map((_, idx) => {
@@ -717,12 +787,14 @@ export function InspectionEntry() {
                       const count = getReadingCount(param.freqOfInspn, form.values.intervalName, param.frequencyUnit);
                       const isNumeric = param.controlLimitMin !== null || param.controlLimitMax !== null;
                       const dayWiseRecorded = isDayWiseAlreadyRecorded(param);
+                      const shiftWiseRecorded = isShiftWiseAlreadyRecorded(param);
+                      const alreadyRecorded = dayWiseRecorded || shiftWiseRecorded;
                       const lc = param.leastCount;
                       const decimalPlaces = lc && lc > 0 ? Math.round(-Math.log10(lc)) : undefined;
                       const stepVal = lc && lc > 0 ? String(lc) : '0.001';
 
                       return (
-                        <Table.Tr key={param.id} className={dayWiseRecorded ? 'opacity-60' : ''}>
+                        <Table.Tr key={param.id} className={alreadyRecorded ? 'opacity-70' : ''}>
                           <Table.Td className="text-center text-xs font-semibold">{idx + 1}</Table.Td>
                           <Table.Td>
                             <Text size="xs" fw={600} lineClamp={1}>{param.parameterName}</Text>
@@ -732,8 +804,8 @@ export function InspectionEntry() {
                             <Text size="xs" lineClamp={1}>{param.specText || '-'}</Text>
                           </Table.Td>
                           <Table.Td>
-                            {dayWiseRecorded ? (
-                              <Text size="xs" c="dimmed" fs="italic">Done</Text>
+                            {alreadyRecorded ? (
+                              <Text size="xs" c="dimmed" fs="italic">{dayWiseRecorded ? 'Done (Day)' : 'Done (Shift)'}</Text>
                             ) : (
                               <div className="flex flex-col gap-1">
                                 {Array.from({ length: count }).map((_, readIdx) => (
@@ -853,6 +925,7 @@ export function InspectionEntry() {
                   const stepVal = lc && lc > 0 ? String(lc) : '0.001';
                   const dayWiseRecorded = isDayWiseAlreadyRecorded(param);
                   const shiftWiseRecorded = isShiftWiseAlreadyRecorded(param);
+                  const alreadyRecorded = dayWiseRecorded || shiftWiseRecorded;
 
                   const validateLcPrecision = (value: string, idx: number) => {
                     if (!lc || lc <= 0 || !decimalPlaces) return;
@@ -864,7 +937,15 @@ export function InspectionEntry() {
                   };
 
                   return (
-                    <div>
+                    <div className="flex flex-col gap-4 relative">
+                      {alreadyRecorded && (
+                        <div className="absolute inset-0 bg-white/50 dark:bg-[#25262b]/50 z-10 flex items-center justify-center rounded-md">
+                          <Badge color="teal" size="lg" variant="light">
+                            {dayWiseRecorded ? 'Already recorded today' : 'Recorded in earlier interval'}
+                          </Badge>
+                        </div>
+                      )}
+                      <div>
                       <Group justify="space-between" align="flex-start" mb="md">
                         <div>
                           <Text fw={700} size="xl">{param.parameterName}</Text>
@@ -882,42 +963,32 @@ export function InspectionEntry() {
                         </Text>
                       </Paper>
 
-                      {dayWiseRecorded ? (
-                        <Alert color="teal" variant="light" icon={<Info size={16} />}>
-                          This parameter has already been recorded in an earlier shift today (Day-wise frequency).
-                        </Alert>
-                      ) : shiftWiseRecorded ? (
-                        <Alert color="teal" variant="light" icon={<Info size={16} />}>
-                          This parameter has already been recorded in an earlier interval this shift.
-                        </Alert>
-                      ) : (
-                        <div className="flex flex-col gap-4">
-                          {Array.from({ length: count }).map((_, idx) => (
-                            <div key={idx}>
-                              <Text size="sm" fw={600} mb={6}>Reading {idx + 1}</Text>
-                              {isNumeric ? (
-                                <TextInput
-                                  placeholder={`Enter reading ${idx + 1}`}
-                                  type="number"
-                                  inputMode="decimal"
-                                  step={stepVal}
-                                  size="xl"
-                                  {...form.getInputProps(`readings.${param.id}_${idx}`)}
-                                  onBlur={(e) => validateLcPrecision(e.target.value, idx)}
-                                />
-                              ) : (
-                                <Autocomplete
-                                  placeholder="Select OK/NG"
-                                  data={['OK', 'NG']}
-                                  size="xl"
-                                  {...form.getInputProps(`readings.${param.id}_${idx}`)}
-                                />
-                              )}
-                              {lc && <Text size="xs" c="dimmed" mt={4}>Least Count: {lc}</Text>}
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      <div className="flex flex-col gap-4">
+                        {Array.from({ length: count }).map((_, idx) => (
+                          <div key={`${param.id}_${idx}`}>
+                            <Text size="sm" fw={600} mb={6}>Reading {idx + 1}</Text>
+                            {isNumeric ? (
+                              <TextInput
+                                placeholder={`Enter reading ${idx + 1}`}
+                                type="number"
+                                inputMode="decimal"
+                                step={stepVal}
+                                size="xl"
+                                {...form.getInputProps(`readings.${param.id}_${idx}`)}
+                                onBlur={(e) => validateLcPrecision(e.target.value, idx)}
+                              />
+                            ) : (
+                              <Autocomplete
+                                placeholder="Select or type OK/NG"
+                                data={['OK', 'NG']}
+                                size="xl"
+                                {...form.getInputProps(`readings.${param.id}_${idx}`)}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
 
                       <Group justify="space-between" mt="xl" pt="md" className="border-t">
                         <Button

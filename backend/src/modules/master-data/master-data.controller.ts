@@ -32,20 +32,20 @@ export class MasterDataController {
   // ── Customer Endpoints ──────────────────────────────────────────
 
   @Get('customers')
-  async getCustomers() {
-    return this.masterDataService.getCustomers();
+  async getCustomers(@Request() req) {
+    return this.masterDataService.getCustomers(req.user);
   }
 
   @Roles(Role.ADMIN)
   @Post('customers')
-  async createCustomer(@Body() body: { name: string; code?: string }) {
-    return this.masterDataService.createCustomer(body.name, body.code);
+  async createCustomer(@Body() body: { name: string; code?: string; machines?: string[] }) {
+    return this.masterDataService.createCustomer(body.name, body.code, body.machines);
   }
 
   @Roles(Role.ADMIN)
   @Put('customers/:id')
-  async updateCustomer(@Param('id') id: string, @Body() body: { name: string; code?: string }) {
-    return this.masterDataService.updateCustomer(id, body.name, body.code);
+  async updateCustomer(@Param('id') id: string, @Body() body: { name: string; code?: string; machines?: string[] }) {
+    return this.masterDataService.updateCustomer(id, body.name, body.code, body.machines);
   }
 
   @Roles(Role.ADMIN)
@@ -72,13 +72,13 @@ export class MasterDataController {
   }
 
   @Get('parts')
-  async getParts() {
-    return this.masterDataService.getParts();
+  async getParts(@Request() req) {
+    return this.masterDataService.getParts(req.user);
   }
 
   @Get('parts-with-operations')
-  async getPartsWithOperations() {
-    return this.masterDataService.getPartsWithOperations();
+  async getPartsWithOperations(@Request() req) {
+    return this.masterDataService.getPartsWithOperations(req.user);
   }
 
   // ── Operation Endpoints ──────────────────────────────────────────

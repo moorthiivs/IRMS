@@ -15,6 +15,10 @@ export class CreateUserDto {
   @IsEnum(Role)
   @IsOptional()
   role?: Role;
+
+  @IsString()
+  @IsOptional()
+  customerId?: string;
 }
 
 export class UpdateUserDto {
@@ -34,4 +38,8 @@ export class UpdateUserDto {
   @IsString()
   @IsOptional()
   signature?: string;
+
+  @IsString()
+  @IsOptional()
+  customerId?: string;
 }

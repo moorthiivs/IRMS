@@ -64,6 +64,7 @@ export class InspectionsService {
     intervalName: string,
     shiftId?: string,
     dateStr?: string,
+    mcNo?: string,
   ) {
     const targetDate = dateStr ? new Date(dateStr) : new Date();
     
@@ -79,6 +80,7 @@ export class InspectionsService {
         operationId,
         intervalName,
         ...(shiftId ? { shiftId } : {}),
+        ...(mcNo ? { mcNo } : {}),
         inspectionTimestamp: {
           gte: startOfDay,
           lte: endOfDay,
@@ -104,7 +106,7 @@ export class InspectionsService {
     }
 
     // 1. Prevent Duplicate Entry
-    const { due, message } = await this.checkInspectionDue(partId, operationId, intervalName, shiftId);
+    const { due, message } = await this.checkInspectionDue(partId, operationId, intervalName, shiftId, undefined, mcNo);
     if (!due) {
       throw new BadRequestException(message);
     }
@@ -161,6 +163,9 @@ export class InspectionsService {
       });
     }
 
+    // 2.5 Get customer ID from part
+    const part = await this.prisma.part.findUnique({ where: { id: partId } });
+
     // 3. Save Inspection Transaction + Details
     const transaction = await this.prisma.inspectionTransaction.create({
       data: {
@@ -173,6 +178,7 @@ export class InspectionsService {
         intervalName,
         remarks,
         status: overallStatus,
+        customerId: part?.customerId,
         details: {
           create: finalDetailsData,
         },
@@ -210,8 +216,11 @@ export class InspectionsService {
     return transaction;
   }
 
-  async getRecentInspections(status?: string, approval?: string, dateStr?: string, shiftId?: string, partId?: string, operationId?: string) {
+  async getRecentInspections(user: any, status?: string, approval?: string, dateStr?: string, shiftId?: string, partId?: string, operationId?: string) {
     const where: any = {};
+    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR') && user.customerId) {
+      where.customerId = user.customerId;
+    }
 
     if (status === 'PASSED' || status === 'REJECTED') {
       where.status = status as any;
@@ -245,7 +254,7 @@ export class InspectionsService {
     const query: any = {
       where,
       include: {
-        part: true,
+        part: { include: { customer: true } },
         operation: true,
         shift: true,
         inspector: {
@@ -295,12 +304,17 @@ export class InspectionsService {
     });
   }
 
-  async getDashboardData() {
+  async getDashboardData(user: any) {
     const today = new Date();
     const startOfDay = new Date(today);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(today);
     endOfDay.setHours(23, 59, 59, 999);
+
+    const whereBase: any = {};
+    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR') && user.customerId) {
+      whereBase.customerId = user.customerId;
+    }
 
     const [
       totalInspections,
@@ -311,18 +325,18 @@ export class InspectionsService {
       shifts,
       transactionsToday,
     ] = await Promise.all([
-      this.prisma.inspectionTransaction.count(),
-      this.prisma.inspectionTransaction.count({ where: { status: TransactionStatus.PASSED } }),
-      this.prisma.inspectionTransaction.count({ where: { status: TransactionStatus.REJECTED } }),
+      this.prisma.inspectionTransaction.count({ where: whereBase }),
+      this.prisma.inspectionTransaction.count({ where: { ...whereBase, status: TransactionStatus.PASSED } }),
+      this.prisma.inspectionTransaction.count({ where: { ...whereBase, status: TransactionStatus.REJECTED } }),
       this.prisma.inspectionTransaction.count({
-        where: { inspectionTimestamp: { gte: startOfDay, lte: endOfDay } },
+        where: { ...whereBase, inspectionTimestamp: { gte: startOfDay, lte: endOfDay } },
       }),
       this.prisma.inspectionTransaction.count({
-        where: { approvedById: null },
+        where: { ...whereBase, approvedById: null },
       }),
       this.prisma.shift.findMany(),
       this.prisma.inspectionTransaction.findMany({
-        where: { inspectionTimestamp: { gte: startOfDay, lte: endOfDay } },
+        where: { ...whereBase, inspectionTimestamp: { gte: startOfDay, lte: endOfDay } },
         include: { shift: true, part: { include: { customer: true } } },
       }),
     ]);
@@ -492,7 +506,7 @@ export class InspectionsService {
     };
   }
 
-  async getDailyReport(partId: string, operationId: string, mcNo?: string, dateStr?: string) {
+  async getDailyReport(user: any, partId: string, operationId: string, mcNo?: string, dateStr?: string) {
     const targetDate = dateStr ? new Date(dateStr) : new Date();
     
     const startOfDay = new Date(targetDate);
@@ -500,16 +514,22 @@ export class InspectionsService {
     const endOfDay = new Date(targetDate);
     endOfDay.setHours(23, 59, 59, 999);
 
-    const transactions = await this.prisma.inspectionTransaction.findMany({
-      where: {
-        partId,
-        operationId,
-        ...(mcNo ? { mcNo } : {}),
-        inspectionTimestamp: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
+    const whereBase: any = {
+      partId,
+      operationId,
+      ...(mcNo ? { mcNo } : {}),
+      inspectionTimestamp: {
+        gte: startOfDay,
+        lte: endOfDay,
       },
+    };
+
+    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR') && user.customerId) {
+      whereBase.customerId = user.customerId;
+    }
+
+    const transactions = await this.prisma.inspectionTransaction.findMany({
+      where: whereBase,
       include: {
         details: {
           include: {
@@ -710,7 +730,7 @@ export class InspectionsService {
     return { message: 'Inspection report deleted successfully' };
   }
 
-  async getTrends(partId: string, operationId: string, days: number = 7, startDate?: string, endDate?: string) {
+  async getTrends(user: any, partId: string, operationId: string, days: number = 7, startDate?: string, endDate?: string) {
     let start: Date;
     let end: Date;
 
@@ -727,13 +747,19 @@ export class InspectionsService {
       start.setHours(0, 0, 0, 0);
     }
 
+    const whereBase: any = {
+      partId,
+      operationId,
+      inspectionTimestamp: { gte: start, lte: end },
+    };
+
+    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR') && user.customerId) {
+      whereBase.customerId = user.customerId;
+    }
+
     // Get all transactions with details in the date range
     const transactions = await this.prisma.inspectionTransaction.findMany({
-      where: {
-        partId,
-        operationId,
-        inspectionTimestamp: { gte: start, lte: end },
-      },
+      where: whereBase,
       include: {
         shift: true,
         details: {

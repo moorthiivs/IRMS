@@ -1,4 +1,4 @@
-import { AppShell, Burger, Group, Text, Avatar, Menu, UnstyledButton, ActionIcon, Tooltip } from '@mantine/core';
+import { AppShell, Burger, Group, Text, Avatar, Menu, UnstyledButton, ActionIcon, Tooltip, SegmentedControl } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -9,7 +9,7 @@ import { LogOut, User as UserIcon, PanelLeftClose, PanelLeftOpen } from 'lucide-
 export function DashboardLayout() {
   const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
   const [desktopCollapsed, { toggle: toggleDesktop }] = useDisclosure(false);
-  const { user, logout } = useAuthStore();
+  const { user, logout, appMode, setAppMode } = useAuthStore();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -45,6 +45,19 @@ export function DashboardLayout() {
             <Text size="xl" fw={700} c="blue.6">
               IRMS
             </Text>
+            <SegmentedControl
+              ml="md"
+              value={appMode}
+              onChange={(val) => {
+                setAppMode(val as 'INSPECTION' | 'POKAYOKE');
+                navigate('/dashboard'); // Navigate to a common starting point
+              }}
+              data={[
+                { label: 'Inspection', value: 'INSPECTION' },
+                { label: 'Poka Yoke', value: 'POKAYOKE' },
+              ]}
+              className="hidden md:flex"
+            />
           </Group>
           
           <Group>
@@ -84,7 +97,7 @@ export function DashboardLayout() {
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <div className="max-w-7xl mx-auto">
+        <div className="w-full h-full">
           <Outlet />
         </div>
       </AppShell.Main>

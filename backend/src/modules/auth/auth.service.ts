@@ -36,6 +36,7 @@ export class AuthService {
         username: user.username,
         name: user.name,
         role: user.role,
+        customerId: user.customerId,
       },
     };
   }
@@ -48,6 +49,7 @@ export class AuthService {
         username: true,
         name: true,
         role: true,
+        customerId: true,
       },
     });
   }

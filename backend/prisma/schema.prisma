@@ -9,7 +9,9 @@ generator client {
 
 enum Role {
   ADMIN
+  SUPERVISOR
   INSPECTOR
+  OPERATOR
 }
 
 enum ValidationStatus {
@@ -35,13 +37,18 @@ model User {
   name         String
   role         Role          @default(INSPECTOR)
   signature    String?       // Base64 encoded signature image drawn via signature pad
+  customerId   String?       // For Supervisor and Operator
+  customer     Customer?     @relation(fields: [customerId], references: [id])
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   transactions InspectionTransaction[]
   approvals    InspectionTransaction[] @relation("ApprovedBy")
   uploads      UploadHistory[]
   drafts       InspectionDraft[]
+  pokaYokeDrafts PokaYokeDraft[]
   corrections  CorrectionEntry[]       @relation("CorrectedBy")
+  pokaYokeTransactions PokaYokeTransaction[] @relation("PokaYokeInspector")
+  pokaYokeApprovals    PokaYokeTransaction[] @relation("PokaYokeAdmin")
 }
 
 model Shift {
@@ -50,6 +57,8 @@ model Shift {
   startTime    String        // "HH:mm" (e.g., "06:00")
   endTime      String        // "HH:mm" (e.g., "14:00")
   transactions InspectionTransaction[]
+  pokaYokeTransactions PokaYokeTransaction[]
+  pokaYokeDrafts       PokaYokeDraft[]
 }
 
 model Customer {
@@ -58,7 +67,11 @@ model Customer {
   code      String?  @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  machines  String[] @default([])
   parts     Part[]
+  users     User[]
+  inspectionTransactions InspectionTransaction[]
+  pokaYokeTransactions   PokaYokeTransaction[]
 }
 
 model Part {
@@ -71,6 +84,9 @@ model Part {
   parameters   InspectionParameter[]
   transactions InspectionTransaction[]
   drafts       InspectionDraft[]
+  pokaYokeDrafts PokaYokeDraft[]
+  pokaYokeItems PokaYokeItem[]
+  pokaYokeTransactions PokaYokeTransaction[]
 }
 
 model Operation {
@@ -131,6 +147,8 @@ model InspectionTransaction {
   remarks             String?
   approvedById        String?            // Admin who approved the report
   approvedAt          DateTime?          // When the report was approved
+  customerId          String?
+  customer            Customer?          @relation(fields: [customerId], references: [id])
   inspector           User               @relation(fields: [inspectorId], references: [id])
   approvedBy          User?              @relation("ApprovedBy", fields: [approvedById], references: [id])
   shift               Shift?             @relation(fields: [shiftId], references: [id])
@@ -205,4 +223,71 @@ model CorrectionEntry {
   transaction       InspectionTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   detail            InspectionDetail      @relation(fields: [detailId], references: [id], onDelete: Cascade)
   correctedBy       User                  @relation("CorrectedBy", fields: [correctedById], references: [id])
+}
+
+model PokaYokeItem {
+  id              String   @id @default(uuid())
+  partId          String
+  operation       String
+  pokaYokeName    String
+  checkingMethod  String?
+  frequency       String?
+  readingType     String   @default("number") // "number" or "text"
+  sequence        Int      @default(0)
+  part            Part     @relation(fields: [partId], references: [id], onDelete: Cascade)
+  details         PokaYokeDetail[]
+
+  @@unique([partId, operation, pokaYokeName])
+}
+
+model PokaYokeTransaction {
+  id                  String             @id @default(uuid())
+  inspectorId         String
+  shiftId             String?
+  partId              String
+  date                DateTime           // Just the date part (e.g. 2026-07-08T00:00:00Z)
+  inspectionTimestamp DateTime           @default(now())
+  status              TransactionStatus
+  remarks             String?
+  adminId             String?
+  adminApprovalDate   DateTime?
+  mcNo                String?            // Machine Number
+  customerId          String?
+  customer            Customer?          @relation(fields: [customerId], references: [id])
+  inspector           User               @relation("PokaYokeInspector", fields: [inspectorId], references: [id])
+  adminUser           User?              @relation("PokaYokeAdmin", fields: [adminId], references: [id])
+  shift               Shift?             @relation(fields: [shiftId], references: [id])
+  part                Part               @relation(fields: [partId], references: [id])
+  details             PokaYokeDetail[]
+
+  // Ensure an inspector only does one entry per shift/date for a part (optional, but good for frequency control)
+  // Actually, better not to restrict too heavily at DB level, let app logic handle it based on frequency string.
+}
+
+model PokaYokeDetail {
+  id                String              @id @default(uuid())
+  transactionId     String
+  pokaYokeItemId    String
+  observedValue     String
+  status            ValidationStatus
+  correctionAction  String?
+  transaction       PokaYokeTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  pokaYokeItem      PokaYokeItem        @relation(fields: [pokaYokeItemId], references: [id])
+}
+
+model PokaYokeDraft {
+  id              String   @id @default(uuid())
+  userId          String
+  partId          String
+  date            DateTime
+  shiftId         String?
+  readingsData    String   // JSON string of { [itemId]: { value, status } }
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User      @relation(fields: [userId], references: [id])
+  part            Part      @relation(fields: [partId], references: [id])
+  shift           Shift?    @relation(fields: [shiftId], references: [id])
+
+  @@unique([userId, partId])
 }

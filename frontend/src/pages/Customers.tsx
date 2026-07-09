@@ -18,6 +18,7 @@ export function Customers() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
+  const [machines, setMachines] = useState<string[]>([]);
 
   const { data: customers = [], isLoading } = useQuery({
     queryKey: ['customers'],
@@ -25,7 +26,7 @@ export function Customers() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => masterDataService.createCustomer(name, code || undefined),
+    mutationFn: () => masterDataService.createCustomer(name, code || undefined, machines.filter(m => m.trim() !== '')),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       notifications.show({ title: 'Created', message: 'Customer created successfully.', color: 'green' });
@@ -37,7 +38,7 @@ export function Customers() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: () => masterDataService.updateCustomer(editingId!, name, code || undefined),
+    mutationFn: () => masterDataService.updateCustomer(editingId!, name, code || undefined, machines.filter(m => m.trim() !== '')),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['parts'] });
@@ -66,12 +67,14 @@ export function Customers() {
     setEditingId(null);
     setName('');
     setCode('');
+    setMachines([]);
   };
 
   const openCreate = () => {
     setEditingId(null);
     setName('');
     setCode('');
+    setMachines([]);
     setModalOpened(true);
   };
 
@@ -79,6 +82,7 @@ export function Customers() {
     setEditingId(customer.id);
     setName(customer.name);
     setCode(customer.code || '');
+    setMachines(customer.machines || []);
     setModalOpened(true);
   };
 
@@ -142,6 +146,7 @@ export function Customers() {
               <Table.Tr>
                 <Table.Th>Customer Name</Table.Th>
                 <Table.Th>Code</Table.Th>
+                <Table.Th>Machines</Table.Th>
                 <Table.Th className="text-center">Linked Parts</Table.Th>
                 <Table.Th>Created</Table.Th>
                 {isAdmin && <Table.Th style={{ width: 100 }}>Actions</Table.Th>}
@@ -159,6 +164,15 @@ export function Customers() {
                   <Table.Td>
                     {customer.code ? (
                       <Badge variant="light" color="gray" size="sm">{customer.code}</Badge>
+                    ) : (
+                      <Text size="xs" c="dimmed">—</Text>
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    {customer.machines && customer.machines.length > 0 ? (
+                      <Badge variant="dot" color="teal" size="sm">
+                        {customer.machines.length} Machines
+                      </Badge>
                     ) : (
                       <Text size="xs" c="dimmed">—</Text>
                     )}
@@ -216,9 +230,43 @@ export function Customers() {
           placeholder="e.g. XYZ"
           value={code}
           onChange={(e) => setCode(e.target.value)}
-          mb="lg"
+          mb="sm"
         />
-        <Group justify="flex-end">
+        
+        <div>
+          <Group justify="space-between" mb="xs">
+            <Text size="sm" fw={500}>Machines</Text>
+            <Button size="compact-xs" variant="light" leftSection={<Plus size={12}/>} onClick={() => setMachines([...machines, ''])}>
+              Add Machine
+            </Button>
+          </Group>
+          {machines.length === 0 && (
+            <Text size="xs" c="dimmed" mb="sm">No machines added yet.</Text>
+          )}
+          {machines.map((mc, index) => (
+            <Group key={index} mb="xs" wrap="nowrap">
+              <TextInput
+                style={{ flex: 1 }}
+                placeholder="Machine Number"
+                value={mc}
+                onChange={(e) => {
+                  const newMachines = [...machines];
+                  newMachines[index] = e.target.value;
+                  setMachines(newMachines);
+                }}
+              />
+              <ActionIcon color="red" variant="subtle" onClick={() => {
+                const newMachines = [...machines];
+                newMachines.splice(index, 1);
+                setMachines(newMachines);
+              }}>
+                <Trash2 size={16} />
+              </ActionIcon>
+            </Group>
+          ))}
+        </div>
+
+        <Group justify="flex-end" mt="lg">
           <Button variant="default" onClick={closeModal}>Cancel</Button>
           <Button
             onClick={handleSubmit}

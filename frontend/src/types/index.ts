@@ -2,7 +2,9 @@ export interface User {
   id: string;
   username: string;
   name: string;
-  role: 'ADMIN' | 'INSPECTOR';
+  role: 'ADMIN' | 'INSPECTOR' | 'SUPERVISOR' | 'OPERATOR';
+  customerId?: string | null;
+  customer?: Customer | null;
   signature?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -19,6 +21,7 @@ export interface Customer {
   id: string;
   name: string;
   code: string | null;
+  machines?: string[];
   createdAt?: string;
   updatedAt?: string;
   _count?: { parts: number };

@@ -1,18 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
-import {
-  Title, Paper, Group, Text, Button, Table, Badge, ActionIcon,
-  Modal, TextInput, Select, Stack, Tooltip,
-  Avatar,
-} from '@mantine/core';
+import { Group, Title, Button, Paper, Table, Avatar, Text, Badge, Tooltip, ActionIcon, Modal, Stack, TextInput, Select, FileInput, Divider } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users as UsersIcon, Plus, Edit, Trash2, PenTool } from 'lucide-react';
+import { UsersIcon, Plus, Edit, PenTool, Trash2, Upload } from 'lucide-react';
 import { usersService } from '../services/users.service';
 import { notifications } from '@mantine/notifications';
 import { User } from '../types';
 import SignaturePad from 'signature_pad';
 import { TableSkeleton } from '../components/TableSkeleton';
-
+import { masterDataService } from '../services/master-data.service';
 export function UserManagement() {
   const queryClient = useQueryClient();
   const [createOpened, { open: openCreate, close: closeCreate }] = useDisclosure(false);
@@ -24,10 +20,16 @@ export function UserManagement() {
   const [formUsername, setFormUsername] = useState('');
   const [formPassword, setFormPassword] = useState('');
   const [formRole, setFormRole] = useState<string>('INSPECTOR');
+  const [formCustomerId, setFormCustomerId] = useState<string | null>(null);
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['users'],
     queryFn: usersService.getAll,
+  });
+
+  const { data: customers = [] } = useQuery({
+    queryKey: ['customers'],
+    queryFn: masterDataService.getCustomers,
   });
 
   const createMutation = useMutation({
@@ -82,6 +84,7 @@ export function UserManagement() {
     setFormUsername('');
     setFormPassword('');
     setFormRole('INSPECTOR');
+    setFormCustomerId(null);
   };
 
   const handleCreate = () => {
@@ -89,13 +92,18 @@ export function UserManagement() {
       username: formUsername,
       password: formPassword,
       name: formName,
-      role: formRole as 'ADMIN' | 'INSPECTOR',
+      role: formRole as 'ADMIN' | 'INSPECTOR' | 'SUPERVISOR' | 'OPERATOR',
+      customerId: (formRole !== 'ADMIN') ? formCustomerId : null,
     });
   };
 
   const handleUpdate = () => {
     if (!editUser) return;
-    const data: any = { name: formName, role: formRole };
+    const data: any = {
+      name: formName,
+      role: formRole,
+      customerId: (formRole !== 'ADMIN') ? formCustomerId : null,
+    };
     if (formPassword) data.password = formPassword;
     updateMutation.mutate({ id: editUser.id, data });
   };
@@ -105,6 +113,7 @@ export function UserManagement() {
     setFormName(user.name);
     setFormUsername(user.username);
     setFormRole(user.role);
+    setFormCustomerId(user.customerId || null);
     setFormPassword('');
   };
 
@@ -131,6 +140,7 @@ export function UserManagement() {
                   <Table.Th>Name</Table.Th>
                   <Table.Th>Username</Table.Th>
                   <Table.Th>Role</Table.Th>
+                  <Table.Th>Customer</Table.Th>
                   <Table.Th>Signature</Table.Th>
                   <Table.Th style={{ minWidth: 120 }}>Actions</Table.Th>
                 </Table.Tr>
@@ -155,9 +165,16 @@ export function UserManagement() {
                       </Table.Td>
                       <Table.Td>{user.username}</Table.Td>
                       <Table.Td>
-                        <Badge color={user.role === 'ADMIN' ? 'violet' : 'blue'} variant="light">
+                        <Badge color={user.role === 'ADMIN' ? 'violet' : (user.role === 'SUPERVISOR' ? 'indigo' : 'blue')} variant="light">
                           {user.role}
                         </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        {user.customer ? (
+                          <Text size="sm">{user.customer.name}</Text>
+                        ) : (
+                          <Text size="xs" c="dimmed">-</Text>
+                        )}
                       </Table.Td>
                       <Table.Td>
                         {user.signature ? (
@@ -216,11 +233,23 @@ export function UserManagement() {
             label="Role"
             data={[
               { value: 'INSPECTOR', label: 'Inspector' },
+              { value: 'OPERATOR', label: 'Operator' },
+              { value: 'SUPERVISOR', label: 'Supervisor' },
               { value: 'ADMIN', label: 'Admin' },
             ]}
             value={formRole}
             onChange={(v) => setFormRole(v || 'INSPECTOR')}
           />
+          {formRole !== 'ADMIN' && (
+            <Select
+              label="Assigned Customer"
+              placeholder="Select a customer"
+              data={customers.map((c: any) => ({ value: c.id, label: c.name }))}
+              value={formCustomerId}
+              onChange={setFormCustomerId}
+              required
+            />
+          )}
           <Button
             fullWidth
             mt="sm"
@@ -243,11 +272,23 @@ export function UserManagement() {
             label="Role"
             data={[
               { value: 'INSPECTOR', label: 'Inspector' },
+              { value: 'OPERATOR', label: 'Operator' },
+              { value: 'SUPERVISOR', label: 'Supervisor' },
               { value: 'ADMIN', label: 'Admin' },
             ]}
             value={formRole}
             onChange={(v) => setFormRole(v || 'INSPECTOR')}
           />
+          {formRole !== 'ADMIN' && (
+            <Select
+              label="Assigned Customer"
+              placeholder="Select a customer"
+              data={customers.map((c: any) => ({ value: c.id, label: c.name }))}
+              value={formCustomerId}
+              onChange={setFormCustomerId}
+              required
+            />
+          )}
           <Button
             fullWidth
             mt="sm"
@@ -327,6 +368,48 @@ function SignaturePadCanvas({
     };
   }, [existingSignature]);
 
+  const handleImageUpload = (file: File | null) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = img.width;
+        tempCanvas.height = img.height;
+        const ctx = tempCanvas.getContext('2d');
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0);
+
+        const imageData = ctx.getImageData(0, 0, img.width, img.height);
+        const data = imageData.data;
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+
+          if (r > 180 && g > 180 && b > 180) {
+            data[i + 3] = 0; // Transparent
+          } else {
+            // Dark pixels
+            data[i] = 20;
+            data[i + 1] = 30;
+            data[i + 2] = 50;
+            data[i + 3] = 255;
+          }
+        }
+        ctx.putImageData(imageData, 0, 0);
+
+        signaturePadRef.current?.clear();
+        signaturePadRef.current?.fromDataURL(tempCanvas.toDataURL('image/png'), {
+          width: canvasRef.current?.offsetWidth || img.width,
+          height: canvasRef.current?.offsetHeight || img.height,
+        });
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
   const handleClear = () => {
     signaturePadRef.current?.clear();
   };
@@ -371,7 +454,7 @@ function SignaturePadCanvas({
     tempCanvas.width = cropW;
     tempCanvas.height = cropH;
     const tempCtx = tempCanvas.getContext('2d');
-    
+
     if (tempCtx) {
       tempCtx.putImageData(ctx.getImageData(minX, minY, cropW, cropH), 0, 0);
       return tempCanvas.toDataURL('image/png');
@@ -396,6 +479,18 @@ function SignaturePadCanvas({
         Draw your signature in the box below using mouse or touch. This standardized signature
         will be used in inspection reports.
       </Text>
+
+      <FileInput
+        label="Upload Signature Image"
+        placeholder="Click to upload an image of your signature"
+        accept="image/png,image/jpeg,image/jpg"
+        leftSection={<Upload size={16} />}
+        onChange={handleImageUpload}
+        clearable
+      />
+
+      <Divider my="xs" label="OR DRAW BELOW" labelPosition="center" />
+
       <div
         style={{
           border: '2px dashed #dee2e6',

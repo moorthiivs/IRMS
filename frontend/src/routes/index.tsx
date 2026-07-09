@@ -18,6 +18,10 @@ const UserManagement = lazy(() => import('../pages/UserManagement').then(m => ({
 const Drafts = lazy(() => import('../pages/Drafts').then(m => ({ default: m.Drafts })));
 const Customers = lazy(() => import('../pages/Customers').then(m => ({ default: m.Customers })));
 const NotFound = lazy(() => import('../pages/NotFound').then(m => ({ default: m.NotFound })));
+const PokaYokeEntry = lazy(() => import('../pages/pokayoke/PokaYokeEntry').then(m => ({ default: m.PokaYokeEntry })));
+const PokaYokeReports = lazy(() => import('../pages/pokayoke/PokaYokeReports').then(m => ({ default: m.PokaYokeReports })));
+const PokaYokeApprovals = lazy(() => import('../pages/pokayoke/PokaYokeApprovals').then(m => ({ default: m.PokaYokeApprovals })));
+
 
 // Global Page Loader
 const PageLoader = () => (
@@ -73,6 +77,11 @@ export function AppRoutes() {
           <Route path="/drafts" element={<ProtectedRoute><Drafts /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/reports/:id" element={<ProtectedRoute><ReportPreview /></ProtectedRoute>} />
+          
+          {/* Poka Yoke Routes */}
+          <Route path="/pokayoke/entry" element={<ProtectedRoute><PokaYokeEntry /></ProtectedRoute>} />
+          <Route path="/pokayoke/reports" element={<ProtectedRoute><PokaYokeReports /></ProtectedRoute>} />
+          <Route path="/pokayoke/approvals" element={<ProtectedRoute><PokaYokeApprovals /></ProtectedRoute>} />
         </Route>
 
         <Route path="/" element={<Navigate to="/login" replace />} />
