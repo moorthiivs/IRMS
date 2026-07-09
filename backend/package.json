@@ -9,12 +9,12 @@
     "build:all": "cd ../frontend && npm run build && xcopy /E /I /Y dist ..\\backend\\client && cd ../backend && npm run build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "node dist/main",
-    "prestart": "npx prisma generate && npx prisma migrate deploy",
+    "prestart": "npx prisma generate && npx prisma migrate resolve --rolled-back 20260709000000_add_customer_id_and_poka_yoke || true && npx prisma migrate deploy",
     "start:local": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "prestart:prod": "npx prisma generate && npx prisma migrate deploy",
+    "prestart:prod": "npx prisma generate && npx prisma migrate resolve --rolled-back 20260709000000_add_customer_id_and_poka_yoke || true && npx prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "ts-node prisma/seed.ts",
@@ -35,10 +35,11 @@
     "multer": "^1.4.5-lts.1",
     "passport": "^0.6.0",
     "passport-jwt": "^4.0.1",
+    "pg": "^8.22.0",
+    "prisma": "^5.22.0",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.1",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.18.5/xlsx-0.18.5.tgz",
-    "prisma": "^5.22.0"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.18.5/xlsx-0.18.5.tgz"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",
