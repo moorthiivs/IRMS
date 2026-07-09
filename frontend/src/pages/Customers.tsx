@@ -141,72 +141,74 @@ export function Customers() {
             )}
           </div>
         ) : (
-          <Table striped highlightOnHover verticalSpacing="sm">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Customer Name</Table.Th>
-                <Table.Th>Code</Table.Th>
-                <Table.Th>Machines</Table.Th>
-                <Table.Th className="text-center">Linked Parts</Table.Th>
-                <Table.Th>Created</Table.Th>
-                {isAdmin && <Table.Th style={{ width: 100 }}>Actions</Table.Th>}
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {customers.map((customer: any) => (
-                <Table.Tr key={customer.id}>
-                  <Table.Td>
-                    <Group gap="sm">
-                      <Building2 size={16} className="text-blue-500" />
-                      <Text fw={600}>{customer.name}</Text>
-                    </Group>
-                  </Table.Td>
-                  <Table.Td>
-                    {customer.code ? (
-                      <Badge variant="light" color="gray" size="sm">{customer.code}</Badge>
-                    ) : (
-                      <Text size="xs" c="dimmed">—</Text>
-                    )}
-                  </Table.Td>
-                  <Table.Td>
-                    {customer.machines && customer.machines.length > 0 ? (
-                      <Badge variant="dot" color="teal" size="sm">
-                        {customer.machines.length} Machines
-                      </Badge>
-                    ) : (
-                      <Text size="xs" c="dimmed">—</Text>
-                    )}
-                  </Table.Td>
-                  <Table.Td className="text-center">
-                    <Badge variant="light" color="blue" size="sm" leftSection={<Package size={10} />}>
-                      {customer._count?.parts || 0} parts
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text size="xs" c="dimmed">
-                      {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString() : '—'}
-                    </Text>
-                  </Table.Td>
-                  {isAdmin && (
+          <div className="overflow-x-auto">
+            <Table striped highlightOnHover verticalSpacing="sm" style={{ minWidth: 600 }}>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Customer Name</Table.Th>
+                  <Table.Th>Code</Table.Th>
+                  <Table.Th>Machines</Table.Th>
+                  <Table.Th className="text-center">Linked Parts</Table.Th>
+                  <Table.Th>Created</Table.Th>
+                  {isAdmin && <Table.Th style={{ width: 100 }}>Actions</Table.Th>}
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {customers.map((customer: any) => (
+                  <Table.Tr key={customer.id}>
                     <Table.Td>
-                      <Group gap="xs" wrap="nowrap">
-                        <Tooltip label="Edit">
-                          <ActionIcon variant="light" color="blue" onClick={() => openEdit(customer)}>
-                            <Pencil size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                        <Tooltip label="Delete">
-                          <ActionIcon variant="light" color="red" onClick={() => handleDelete(customer)} loading={deleteMutation.isPending}>
-                            <Trash2 size={16} />
-                          </ActionIcon>
-                        </Tooltip>
+                      <Group gap="sm">
+                        <Building2 size={16} className="text-blue-500" />
+                        <Text fw={600}>{customer.name}</Text>
                       </Group>
                     </Table.Td>
-                  )}
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
+                    <Table.Td>
+                      {customer.code ? (
+                        <Badge variant="light" color="gray" size="sm">{customer.code}</Badge>
+                      ) : (
+                        <Text size="xs" c="dimmed">—</Text>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      {customer.machines && customer.machines.length > 0 ? (
+                        <Badge variant="dot" color="teal" size="sm">
+                          {customer.machines.length} Machines
+                        </Badge>
+                      ) : (
+                        <Text size="xs" c="dimmed">—</Text>
+                      )}
+                    </Table.Td>
+                    <Table.Td className="text-center">
+                      <Badge variant="light" color="blue" size="sm" leftSection={<Package size={10} />}>
+                        {customer._count?.parts || 0} parts
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" c="dimmed">
+                        {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString() : '—'}
+                      </Text>
+                    </Table.Td>
+                    {isAdmin && (
+                      <Table.Td>
+                        <Group gap="xs" wrap="nowrap">
+                          <Tooltip label="Edit">
+                            <ActionIcon variant="light" color="blue" onClick={() => openEdit(customer)}>
+                              <Pencil size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label="Delete">
+                            <ActionIcon variant="light" color="red" onClick={() => handleDelete(customer)} loading={deleteMutation.isPending}>
+                              <Trash2 size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        </Group>
+                      </Table.Td>
+                    )}
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </div>
         )}
       </Paper>
 

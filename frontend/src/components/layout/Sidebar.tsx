@@ -1,5 +1,5 @@
-import { NavLink as RouterLink, useLocation } from 'react-router-dom';
-import { NavLink, Stack } from '@mantine/core';
+import { NavLink as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, Stack, SegmentedControl } from '@mantine/core';
 import { 
   LayoutDashboard, 
   ClipboardCheck, 
@@ -18,7 +18,7 @@ interface SidebarProps {
 
 export function Sidebar({ onClose }: SidebarProps) {
   const location = useLocation();
-  const { user, appMode } = useAuthStore();
+  const { user, appMode, setAppMode } = useAuthStore();
   const isAdmin = user?.role === 'ADMIN';
   const isSupervisor = user?.role === 'SUPERVISOR';
 
@@ -53,9 +53,24 @@ export function Sidebar({ onClose }: SidebarProps) {
     ...adminLinks,
   ];
 
+  const navigate = useNavigate();
 
   return (
     <Stack gap="xs">
+      <SegmentedControl
+        value={appMode}
+        onChange={(val) => {
+          setAppMode(val as 'INSPECTION' | 'POKAYOKE');
+          navigate('/dashboard');
+          if (onClose) onClose();
+        }}
+        data={[
+          { label: 'Inspection', value: 'INSPECTION' },
+          { label: 'Poka Yoke', value: 'POKAYOKE' },
+        ]}
+        className="md:hidden mb-2"
+        fullWidth
+      />
       {links.map((link) => (
         <RouterLink key={link.label} to={link.to} style={{ textDecoration: 'none' }} onClick={onClose}>
           <NavLink
