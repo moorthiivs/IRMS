@@ -91,14 +91,14 @@ export function ExcelUpload({ onUploadSuccess }: { onUploadSuccess?: () => void 
     setPreviewData(null);
   };
 
-  const handleDownloadTemplate = () => {
-    const link = document.createElement('a');
-    link.href = '/upload template.xlsx';
-    link.setAttribute('download', 'upload template.xlsx');
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  };
+  // const handleDownloadTemplate = () => {
+  //   const link = document.createElement('a');
+  //   link.href = '/upload template.xlsx';
+  //   link.setAttribute('download', 'upload template.xlsx');
+  //   document.body.appendChild(link);
+  //   link.click();
+  //   link.remove();
+  // };
 
   return (
     <div>
