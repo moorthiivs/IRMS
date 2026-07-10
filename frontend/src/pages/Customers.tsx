@@ -3,11 +3,12 @@ import {
   Title, Paper, Table, Group, Badge, ActionIcon, Button, Text, TextInput, Modal, Tooltip, Skeleton
 } from '@mantine/core';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Building2, Package } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Package, Cpu } from 'lucide-react';
 import { masterDataService } from '../services/master-data.service';
 import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
 import { useAuthStore } from '../store/auth-store';
+import { MachineManagerModal } from '../components/MachineManagerModal';
 
 export function Customers() {
   const queryClient = useQueryClient();
@@ -18,7 +19,9 @@ export function Customers() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
-  const [machines, setMachines] = useState<string[]>([]);
+  
+  const [machineManagerOpened, setMachineManagerOpened] = useState(false);
+  const [selectedCustomerForMachines, setSelectedCustomerForMachines] = useState<any>(null);
 
   const { data: customers = [], isLoading } = useQuery({
     queryKey: ['customers'],
@@ -26,7 +29,7 @@ export function Customers() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => masterDataService.createCustomer(name, code || undefined, machines.filter(m => m.trim() !== '')),
+    mutationFn: () => masterDataService.createCustomer(name, code || undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       notifications.show({ title: 'Created', message: 'Customer created successfully.', color: 'green' });
@@ -38,7 +41,7 @@ export function Customers() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: () => masterDataService.updateCustomer(editingId!, name, code || undefined, machines.filter(m => m.trim() !== '')),
+    mutationFn: () => masterDataService.updateCustomer(editingId!, name, code || undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['parts'] });
@@ -67,14 +70,12 @@ export function Customers() {
     setEditingId(null);
     setName('');
     setCode('');
-    setMachines([]);
   };
 
   const openCreate = () => {
     setEditingId(null);
     setName('');
     setCode('');
-    setMachines([]);
     setModalOpened(true);
   };
 
@@ -82,8 +83,12 @@ export function Customers() {
     setEditingId(customer.id);
     setName(customer.name);
     setCode(customer.code || '');
-    setMachines(customer.machines || []);
     setModalOpened(true);
+  };
+
+  const openMachineManager = (customer: any) => {
+    setSelectedCustomerForMachines(customer);
+    setMachineManagerOpened(true);
   };
 
   const handleDelete = (customer: any) => {
@@ -191,6 +196,11 @@ export function Customers() {
                     {isAdmin && (
                       <Table.Td>
                         <Group gap="xs" wrap="nowrap">
+                          <Tooltip label="Manage Machines">
+                            <ActionIcon variant="light" color="teal" onClick={() => openMachineManager(customer)}>
+                              <Cpu size={16} />
+                            </ActionIcon>
+                          </Tooltip>
                           <Tooltip label="Edit">
                             <ActionIcon variant="light" color="blue" onClick={() => openEdit(customer)}>
                               <Pencil size={16} />
@@ -232,41 +242,8 @@ export function Customers() {
           placeholder="e.g. XYZ"
           value={code}
           onChange={(e) => setCode(e.target.value)}
-          mb="sm"
+          mb="xl"
         />
-        
-        <div>
-          <Group justify="space-between" mb="xs">
-            <Text size="sm" fw={500}>Machines</Text>
-            <Button size="compact-xs" variant="light" leftSection={<Plus size={12}/>} onClick={() => setMachines([...machines, ''])}>
-              Add Machine
-            </Button>
-          </Group>
-          {machines.length === 0 && (
-            <Text size="xs" c="dimmed" mb="sm">No machines added yet.</Text>
-          )}
-          {machines.map((mc, index) => (
-            <Group key={index} mb="xs" wrap="nowrap">
-              <TextInput
-                style={{ flex: 1 }}
-                placeholder="Machine Number"
-                value={mc}
-                onChange={(e) => {
-                  const newMachines = [...machines];
-                  newMachines[index] = e.target.value;
-                  setMachines(newMachines);
-                }}
-              />
-              <ActionIcon color="red" variant="subtle" onClick={() => {
-                const newMachines = [...machines];
-                newMachines.splice(index, 1);
-                setMachines(newMachines);
-              }}>
-                <Trash2 size={16} />
-              </ActionIcon>
-            </Group>
-          ))}
-        </div>
 
         <Group justify="flex-end" mt="lg">
           <Button variant="default" onClick={closeModal}>Cancel</Button>
@@ -279,6 +256,15 @@ export function Customers() {
           </Button>
         </Group>
       </Modal>
+      {/* Machine Manager Modal */}
+      <MachineManagerModal 
+        opened={machineManagerOpened}
+        onClose={() => {
+          setMachineManagerOpened(false);
+          setSelectedCustomerForMachines(null);
+        }}
+        customer={selectedCustomerForMachines}
+      />
     </div>
   );
 }

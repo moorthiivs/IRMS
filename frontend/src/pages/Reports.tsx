@@ -1478,7 +1478,7 @@ export function Reports() {
                             <Tooltip label={`Approve ${unapproved.length} transaction(s) for ${shift}`}>
                               <Button
                                 size="compact-xs"
-                                color="red"
+                                color="yellow"
                                 variant="filled"
                                 leftSection={<CheckCircle size={12} />}
                                 loading={approveMutation.isPending}

@@ -218,7 +218,7 @@ export class InspectionsService {
 
   async getRecentInspections(user: any, status?: string, approval?: string, dateStr?: string, shiftId?: string, partId?: string, operationId?: string) {
     const where: any = {};
-    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR') && user.customerId) {
+    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR' || user.role === 'INSPECTOR') && user.customerId) {
       where.customerId = user.customerId;
     }
 
@@ -312,7 +312,7 @@ export class InspectionsService {
     endOfDay.setHours(23, 59, 59, 999);
 
     const whereBase: any = {};
-    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR') && user.customerId) {
+    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR' || user.role === 'INSPECTOR') && user.customerId) {
       whereBase.customerId = user.customerId;
     }
 
@@ -524,7 +524,7 @@ export class InspectionsService {
       },
     };
 
-    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR') && user.customerId) {
+    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR' || user.role === 'INSPECTOR') && user.customerId) {
       whereBase.customerId = user.customerId;
     }
 
@@ -753,7 +753,7 @@ export class InspectionsService {
       inspectionTimestamp: { gte: start, lte: end },
     };
 
-    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR') && user.customerId) {
+    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR' || user.role === 'INSPECTOR') && user.customerId) {
       whereBase.customerId = user.customerId;
     }
 

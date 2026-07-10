@@ -19,6 +19,7 @@ export function UserManagement() {
   const [formName, setFormName] = useState('');
   const [formUsername, setFormUsername] = useState('');
   const [formPassword, setFormPassword] = useState('');
+  const [formEmail, setFormEmail] = useState('');
   const [formRole, setFormRole] = useState<string>('INSPECTOR');
   const [formCustomerId, setFormCustomerId] = useState<string | null>(null);
 
@@ -83,6 +84,7 @@ export function UserManagement() {
     setFormName('');
     setFormUsername('');
     setFormPassword('');
+    setFormEmail('');
     setFormRole('INSPECTOR');
     setFormCustomerId(null);
   };
@@ -92,6 +94,7 @@ export function UserManagement() {
       username: formUsername,
       password: formPassword,
       name: formName,
+      email: formEmail || undefined,
       role: formRole as 'ADMIN' | 'INSPECTOR' | 'SUPERVISOR' | 'OPERATOR',
       customerId: (formRole !== 'ADMIN') ? formCustomerId : null,
     });
@@ -101,6 +104,7 @@ export function UserManagement() {
     if (!editUser) return;
     const data: any = {
       name: formName,
+      email: formEmail || undefined,
       role: formRole,
       customerId: (formRole !== 'ADMIN') ? formCustomerId : null,
     };
@@ -112,6 +116,7 @@ export function UserManagement() {
     setEditUser(user);
     setFormName(user.name);
     setFormUsername(user.username);
+    setFormEmail((user as any).email || '');
     setFormRole(user.role);
     setFormCustomerId(user.customerId || null);
     setFormPassword('');
@@ -228,6 +233,7 @@ export function UserManagement() {
         <Stack gap="sm">
           <TextInput label="Full Name" placeholder="John Doe" value={formName} onChange={(e) => setFormName(e.target.value)} required />
           <TextInput label="Username" placeholder="johndoe" value={formUsername} onChange={(e) => setFormUsername(e.target.value)} required />
+          <TextInput label="Email (Optional)" placeholder="john@example.com" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} />
           <TextInput label="Password" type="password" placeholder="Min 4 characters" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} required />
           <Select
             label="Role"
@@ -267,6 +273,7 @@ export function UserManagement() {
         <Stack gap="sm">
           <TextInput label="Full Name" value={formName} onChange={(e) => setFormName(e.target.value)} required />
           <TextInput label="Username" value={formUsername} disabled description="Username cannot be changed" />
+          <TextInput label="Email (Optional)" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} />
           <TextInput label="New Password" type="password" placeholder="Leave blank to keep current" value={formPassword} onChange={(e) => setFormPassword(e.target.value)} />
           <Select
             label="Role"

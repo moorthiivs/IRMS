@@ -7,6 +7,7 @@ import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
 import api from '../../lib/axios';
 import { masterDataService } from '../../services/master-data.service';
+import { settingsService } from '../../services/settings.service';
 import { format } from 'date-fns';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -310,22 +311,33 @@ export function PokaYokeReports() {
     if (!reportRef.current) return;
     setIsDownloading(true);
     try {
-      const canvas = await html2canvas(reportRef.current, { scale: 2, useCORS: true });
+      const canvas = await html2canvas(reportRef.current, { scale: 2, useCORS: true, scrollX: 0, scrollY: 0, windowWidth: reportRef.current.scrollWidth });
       const imgData = canvas.toDataURL('image/png');
       
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      // Convert pixels to mm roughly (1 px ~ 0.264583 mm)
-      const pdfWidth = imgWidth * 0.264583;
-      const pdfHeight = imgHeight * 0.264583;
+      // A4 landscape dimensions in mm
+      const a4Width = 297;
+      const a4Height = 210;
+      const margin = 5;
+      const contentWidth = a4Width - margin * 2;
+      const contentHeight = a4Height - margin * 2;
+      
+      const imgAspect = canvas.width / canvas.height;
+      let drawWidth = contentWidth;
+      let drawHeight = contentWidth / imgAspect;
+      
+      // If image is taller than page, scale down
+      if (drawHeight > contentHeight) {
+        drawHeight = contentHeight;
+        drawWidth = contentHeight * imgAspect;
+      }
       
       const pdf = new jsPDF({
-        orientation: pdfWidth > pdfHeight ? 'l' : 'p',
+        orientation: 'l',
         unit: 'mm',
-        format: [pdfWidth, pdfHeight]
+        format: 'a4'
       });
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.addImage(imgData, 'PNG', margin, margin, drawWidth, drawHeight);
       pdf.save(`Pokayoke_Report.pdf`);
     } catch (err) {
       notifications.show({ title: 'Error', message: 'Failed to generate PDF.', color: 'red' });
@@ -338,6 +350,19 @@ export function PokaYokeReports() {
     queryKey: ['parts'],
     queryFn: masterDataService.getParts,
   });
+
+  const { data: settings = {} } = useQuery({
+    queryKey: ['settings'],
+    queryFn: settingsService.getAll,
+  });
+
+  const tpl = {
+    companyName: settings.report_company_name || 'SUNDRAM FASTENERS LTD., (AUTOLEC DIVISION PLANT-II) GUMMIDIPOONDI-601201',
+    title: settings.report_title || 'POKA-YOKE INSPECTION REPORT',
+    rNo: settings.report_r_no || '03',
+    rDate: settings.report_r_date || '23.04.2023',
+    docNumber: settings.report_doc_number || 'TAF/P2/9.4',
+  };
 
   const { data: reportData, isLoading } = useQuery({
     queryKey: ['pokayoke-report', selectedPart, dateRange[0]?.toISOString(), dateRange[1]?.toISOString()],
@@ -611,7 +636,7 @@ export function PokaYokeReports() {
                     </Button>
                   </Group>
                   <div className="overflow-x-auto">
-                    <div ref={reportRef} className="bg-white p-2" style={{ minWidth: 1000, width: 'max-content' }}>
+                    <div ref={reportRef} className="bg-white p-2" style={{ minWidth: 800, maxWidth: 1123, width: '100%' }}>
                       <Table striped highlightOnHover withTableBorder withColumnBorders>
                     <Table.Thead className="bg-white dark:bg-[#1f2025]">
                       <Table.Tr>
@@ -624,8 +649,8 @@ export function PokaYokeReports() {
                           </div>
                         </Table.Th>
                         <Table.Th colSpan={4 + dateColumns.length} style={{ padding: '12px' }}>
-                          <Text fw={800} size="sm">SUNDRAM FASTENERS LTD., (AUTOLEC DIVISION PLANT-II) GUMMIDIPOONDI-601201</Text>
-                          <Text fw={700} size="sm" mt={4}>POKA-YOKE INSPECTION REPORT</Text>
+                          <Text fw={800} size="sm">{tpl.companyName}</Text>
+                          <Text fw={700} size="sm" mt={4}>{tpl.title}</Text>
                           <Text fw={700} size="sm" mt={4} style={{ textTransform: 'uppercase' }}>
                             PART NUMBER : {parts.find((p: any) => p.id === selectedPart)?.partNumber} {parts.find((p: any) => p.id === selectedPart)?.partName}
                           </Text>
@@ -641,8 +666,8 @@ export function PokaYokeReports() {
                       </Table.Tr>
                       <Table.Tr>
                         {dateColumns.map((d, i) => (
-                          <Table.Th key={i} style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            {d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '-')}
+                          <Table.Th key={i} style={{ textAlign: 'center', whiteSpace: 'nowrap', padding: '4px 6px', fontSize: '11px' }}>
+                            {String(d.getDate()).padStart(2, '0')}
                           </Table.Th>
                         ))}
                       </Table.Tr>
@@ -650,17 +675,17 @@ export function PokaYokeReports() {
                     <Table.Tbody>
                       {reportData.items.map((item: any, idx: number) => (
                         <Table.Tr key={item.id}>
-                          <Table.Td fw={500}>{idx + 1}</Table.Td>
-                          <Table.Td>{item.operation}</Table.Td>
-                          <Table.Td>{item.pokaYokeName}</Table.Td>
-                          <Table.Td>{item.checkingMethod || '-'}</Table.Td>
-                          <Table.Td>
-                            <Badge variant="light" color="gray">{item.frequency || 'N/A'}</Badge>
+                          <Table.Td fw={500} style={{ padding: '4px 6px', fontSize: '11px' }}>{idx + 1}</Table.Td>
+                          <Table.Td style={{ wordBreak: 'break-word', whiteSpace: 'normal', maxWidth: 120, padding: '4px 6px', fontSize: '11px' }}>{item.operation}</Table.Td>
+                          <Table.Td style={{ wordBreak: 'break-word', whiteSpace: 'normal', maxWidth: 150, padding: '4px 6px', fontSize: '11px' }}>{item.pokaYokeName}</Table.Td>
+                          <Table.Td style={{ wordBreak: 'break-word', whiteSpace: 'normal', maxWidth: 120, padding: '4px 6px', fontSize: '11px' }}>{item.checkingMethod || '-'}</Table.Td>
+                          <Table.Td style={{ padding: '4px 6px', fontSize: '11px' }}>
+                            <Text size="xs">{item.frequency || 'N/A'}</Text>
                           </Table.Td>
                           {dateColumns.map((d, i) => {
                             const reading = getReading(item.id, d);
                             return (
-                              <Table.Td key={i} style={{ textAlign: 'center' }}>
+                              <Table.Td key={i} style={{ textAlign: 'center', padding: '4px 6px' }}>
                                 {reading ? (
                                   <Group gap={4} justify="center" wrap="nowrap">
                                     {reading.status === 'PASS' ? (
@@ -702,7 +727,7 @@ export function PokaYokeReports() {
 
                       {/* Signature Section */}
                       <Table.Tr>
-                        <Table.Td colSpan={3} fw={700} style={{ borderBottom: 'none', paddingBottom: 4 }}>R.No : 03</Table.Td>
+                        <Table.Td colSpan={3} fw={700} style={{ borderBottom: 'none', paddingBottom: 4 }}>R.No : {tpl.rNo}</Table.Td>
                         <Table.Td colSpan={2} fw={700}>INSPECTED BY</Table.Td>
                         {dateColumns.map((d, i) => {
                           const txn = getTransactionForDate(d);
@@ -720,7 +745,7 @@ export function PokaYokeReports() {
                         })}
                       </Table.Tr>
                       <Table.Tr>
-                        <Table.Td colSpan={3} fw={700} style={{ borderTop: 'none', paddingTop: 0 }}>R.Date : 23.04.2023</Table.Td>
+                        <Table.Td colSpan={3} fw={700} style={{ borderTop: 'none', paddingTop: 0 }}>R.Date : {tpl.rDate}</Table.Td>
                         <Table.Td colSpan={2} fw={700}>APPROVED BY</Table.Td>
                         {dateColumns.map((d, i) => {
                           const txn = getTransactionForDate(d);
@@ -739,7 +764,7 @@ export function PokaYokeReports() {
                       </Table.Tr>
                     </Table.Tbody>
                   </Table>
-                  <Text size="xs" fw={600} mt="xs" mb="xs">TAF/P2/9.4</Text>
+                  <Text size="xs" fw={600} mt="xs" mb="xs">{tpl.docNumber}</Text>
                 </div>
               </div>
             </div>

@@ -19,6 +19,10 @@ export class CreateUserDto {
   @IsString()
   @IsOptional()
   customerId?: string;
+
+  @IsString()
+  @IsOptional()
+  email?: string;
 }
 
 export class UpdateUserDto {
@@ -42,4 +46,8 @@ export class UpdateUserDto {
   @IsString()
   @IsOptional()
   customerId?: string;
+
+  @IsString()
+  @IsOptional()
+  email?: string;
 }

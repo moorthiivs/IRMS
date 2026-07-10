@@ -48,6 +48,12 @@ export class MasterDataController {
     return this.masterDataService.updateCustomer(id, body.name, body.code, body.machines);
   }
 
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @Put('customers/:id/active-machines')
+  async updateCustomerActiveMachines(@Param('id') id: string, @Body() body: { activeMachines: string[] }) {
+    return this.masterDataService.updateCustomerActiveMachines(id, body.activeMachines);
+  }
+
   @Roles(Role.ADMIN)
   @Delete('customers/:id')
   async deleteCustomer(@Param('id') id: string) {

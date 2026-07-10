@@ -14,6 +14,7 @@ export class UsersService {
         username: true,
         name: true,
         role: true,
+        email: true,
         signature: true,
         customerId: true,
         customer: { select: { name: true } },
@@ -32,6 +33,7 @@ export class UsersService {
         username: true,
         name: true,
         role: true,
+        email: true,
         signature: true,
         customerId: true,
         customer: { select: { name: true } },
@@ -57,6 +59,7 @@ export class UsersService {
         username: dto.username,
         passwordHash,
         name: dto.name,
+        email: dto.email,
         role: dto.role || 'INSPECTOR',
         customerId: dto.customerId,
       },
@@ -64,6 +67,7 @@ export class UsersService {
         id: true,
         username: true,
         name: true,
+        email: true,
         role: true,
         createdAt: true,
       },
@@ -76,6 +80,7 @@ export class UsersService {
 
     const updateData: any = {};
     if (dto.name) updateData.name = dto.name;
+    if (dto.email !== undefined) updateData.email = dto.email;
     if (dto.role) updateData.role = dto.role;
     if (dto.signature !== undefined) updateData.signature = dto.signature;
     if (dto.customerId !== undefined) updateData.customerId = dto.customerId;
@@ -90,6 +95,7 @@ export class UsersService {
         id: true,
         username: true,
         name: true,
+        email: true,
         role: true,
         signature: true,
         customerId: true,

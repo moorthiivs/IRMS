@@ -31,14 +31,14 @@ const PageLoader = () => (
 );
 
 // Auth Guard Component
-const ProtectedRoute = ({ children, requireAdmin = false }: { children: JSX.Element, requireAdmin?: boolean }) => {
+const ProtectedRoute = ({ children, allowedRoles }: { children: JSX.Element, allowedRoles?: string[] }) => {
   const { token, user } = useAuthStore();
   
   if (!token || !user) {
     return <Navigate to="/login" replace />;
   }
   
-  if (requireAdmin && user.role !== 'ADMIN') {
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
     return <Navigate to="/dashboard" replace />;
   }
   
@@ -66,11 +66,11 @@ export function AppRoutes() {
         <Route element={<DashboardLayout />}>
           {/* Admin Routes */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/master-data" element={<ProtectedRoute requireAdmin><MasterData /></ProtectedRoute>} />
-          <Route path="/customers" element={<ProtectedRoute requireAdmin><Customers /></ProtectedRoute>} />
-          <Route path="/upload" element={<ProtectedRoute requireAdmin><ExcelUpload /></ProtectedRoute>} />
-          <Route path="/settings" element={<ProtectedRoute requireAdmin><Settings /></ProtectedRoute>} />
-          <Route path="/users" element={<ProtectedRoute requireAdmin><UserManagement /></ProtectedRoute>} />
+          <Route path="/master-data" element={<ProtectedRoute allowedRoles={['ADMIN', 'SUPERVISOR']}><MasterData /></ProtectedRoute>} />
+          <Route path="/customers" element={<ProtectedRoute allowedRoles={['ADMIN', 'SUPERVISOR']}><Customers /></ProtectedRoute>} />
+          <Route path="/upload" element={<ProtectedRoute allowedRoles={['ADMIN', 'SUPERVISOR']}><ExcelUpload /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute allowedRoles={['ADMIN']}><Settings /></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute allowedRoles={['ADMIN']}><UserManagement /></ProtectedRoute>} />
           
           {/* Shared/Inspector Routes */}
           <Route path="/inspection" element={<ProtectedRoute><InspectionEntry /></ProtectedRoute>} />

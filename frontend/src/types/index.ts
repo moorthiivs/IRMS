@@ -22,6 +22,7 @@ export interface Customer {
   name: string;
   code: string | null;
   machines?: string[];
+  activeMachines?: string[];
   createdAt?: string;
   updatedAt?: string;
   _count?: { parts: number };

@@ -1,5 +1,5 @@
 import { NavLink as RouterLink, useLocation, useNavigate } from 'react-router-dom';
-import { NavLink, Stack, SegmentedControl } from '@mantine/core';
+import { NavLink, Stack, SegmentedControl, Select, MultiSelect, Divider } from '@mantine/core';
 import { 
   LayoutDashboard, 
   ClipboardCheck, 
@@ -8,9 +8,13 @@ import {
   Settings,
   Users,
   Save,
-  Building2
+  Building2,
+  Cpu
 } from 'lucide-react';
 import { useAuthStore } from '../../store/auth-store';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { masterDataService } from '../../services/master-data.service';
+import { useState, useEffect } from 'react';
 
 interface SidebarProps {
   onClose?: () => void;
@@ -18,9 +22,23 @@ interface SidebarProps {
 
 export function Sidebar({ onClose }: SidebarProps) {
   const location = useLocation();
-  const { user, appMode, setAppMode } = useAuthStore();
+  const { user, appMode, setAppMode, selectedCustomerId, setSelectedCustomerId } = useAuthStore();
+  const [activeMachines, setActiveMachines] = useState<string[]>([]);
+  const queryClient = useQueryClient();
   const isAdmin = user?.role === 'ADMIN';
   const isSupervisor = user?.role === 'SUPERVISOR';
+
+  const { data: customers = [] } = useQuery({
+    queryKey: ['customers'],
+    queryFn: masterDataService.getCustomers,
+  });
+
+  const selectedCustomer = customers.find((c: any) => c.id === selectedCustomerId);
+  const allMachines: string[] = selectedCustomer?.machines || [];
+
+  useEffect(() => {
+    setActiveMachines(selectedCustomer?.activeMachines || []);
+  }, [selectedCustomer]);
 
   const inspectionLinks = [
     { icon: LayoutDashboard, label: 'Dashboard', to: '/dashboard' },
@@ -71,6 +89,46 @@ export function Sidebar({ onClose }: SidebarProps) {
         className="md:hidden mb-2"
         fullWidth
       />
+
+      {/* Mobile Customer/Machine Selector */}
+      <div className="md:hidden">
+        <Select
+          placeholder="Select Customer"
+          data={customers.map((c: any) => ({ value: c.id, label: c.name }))}
+          value={selectedCustomerId}
+          onChange={(val) => {
+            setSelectedCustomerId(val);
+          }}
+          size="xs"
+          clearable={isAdmin}
+          disabled={!isAdmin && !!user?.customerId}
+          leftSection={<Building2 size={14} />}
+          mb="xs"
+        />
+        {selectedCustomerId && allMachines.length > 0 && (
+          <MultiSelect
+            placeholder="Active Machines"
+            data={allMachines.map(m => ({ value: m, label: m }))}
+            value={activeMachines}
+            onChange={(machines) => {
+              setActiveMachines(machines);
+              if (selectedCustomerId) {
+                masterDataService.updateCustomerActiveMachines(selectedCustomerId, machines)
+                  .then(() => queryClient.invalidateQueries({ queryKey: ['customers'] }))
+                  .catch(console.error);
+              }
+            }}
+            size="xs"
+            leftSection={<Cpu size={14} />}
+            maxDropdownHeight={200}
+            searchable
+            hidePickedOptions
+            mb="xs"
+          />
+        )}
+        <Divider mb="xs" />
+      </div>
+
       {links.map((link) => (
         <RouterLink key={link.label} to={link.to} style={{ textDecoration: 'none' }} onClick={onClose}>
           <NavLink

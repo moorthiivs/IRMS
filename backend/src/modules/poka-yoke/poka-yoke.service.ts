@@ -115,7 +115,7 @@ export class PokaYokeService {
       },
     };
 
-    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR') && user.customerId) {
+    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR' || user.role === 'INSPECTOR') && user.customerId) {
       whereBase.customerId = user.customerId;
     }
 

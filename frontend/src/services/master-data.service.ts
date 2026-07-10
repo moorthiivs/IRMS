@@ -24,6 +24,11 @@ export const masterDataService = {
     return data;
   },
 
+  updateCustomerActiveMachines: async (id: string, activeMachines: string[]): Promise<Customer> => {
+    const { data } = await api.put(`/master-data/customers/${id}/active-machines`, { activeMachines });
+    return data;
+  },
+
   assignPartCustomer: async (partId: string, customerId: string | null): Promise<Part> => {
     const { data } = await api.patch(`/master-data/parts/${partId}/customer`, { customerId });
     return data;

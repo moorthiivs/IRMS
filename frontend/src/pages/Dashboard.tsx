@@ -102,7 +102,13 @@ export function Dashboard() {
       : [];
 
     const activeCustomer = customers.find(c => c.id === userCustomerId);
-    const customerMachines = activeCustomer?.machines || [];
+    
+    // Filter machines based on activeMachines selection from the Customer data
+    const activeMachines = activeCustomer?.activeMachines || [];
+    const customerMachines = (activeCustomer?.machines || []).filter(
+      (m: string) => activeMachines.length === 0 || activeMachines.includes(m)
+    );
+    
     return (
       <div className="max-w-2xl mx-auto mt-10">
         <Title order={2} mb="md" ta="center">

@@ -112,7 +112,12 @@ export function InspectionEntry() {
     ? parts.filter(p => p.customerId === userCustomerId)
     : [];
   const activeCustomer = customers.find(c => c.id === userCustomerId);
-  const customerMachines = activeCustomer?.machines || [];
+  const activeMachines = activeCustomer?.activeMachines || [];
+  
+  // Filter machines based on activeMachines selection from Customer
+  const customerMachines = (activeCustomer?.machines || []).filter(
+    (m: string) => activeMachines.length === 0 || activeMachines.includes(m)
+  );
 
   const { data: operations = [] } = useQuery({
     queryKey: ['operations', selectedPart],

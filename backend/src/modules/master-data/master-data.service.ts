@@ -11,7 +11,7 @@ export class MasterDataService {
 
   async getCustomers(user?: any) {
     const where: any = {};
-    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR') && user.customerId) {
+    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR' || user.role === 'INSPECTOR') && user.customerId) {
       where.id = user.customerId;
     }
     return this.prisma.customer.findMany({
@@ -37,6 +37,13 @@ export class MasterDataService {
     return this.prisma.customer.update({
       where: { id },
       data,
+    });
+  }
+
+  async updateCustomerActiveMachines(id: string, activeMachines: string[]) {
+    return this.prisma.customer.update({
+      where: { id },
+      data: { activeMachines },
     });
   }
 
@@ -91,7 +98,7 @@ export class MasterDataService {
 
   async getParts(user?: any) {
     const where: any = {};
-    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR') && user.customerId) {
+    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR' || user.role === 'INSPECTOR') && user.customerId) {
       where.customerId = user.customerId;
     }
     return this.prisma.part.findMany({
@@ -103,7 +110,7 @@ export class MasterDataService {
 
   async getPartsWithOperations(user?: any) {
     const where: any = {};
-    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR') && user.customerId) {
+    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR' || user.role === 'INSPECTOR') && user.customerId) {
       where.customerId = user.customerId;
     }
     const parts = await this.prisma.part.findMany({

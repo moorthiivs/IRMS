@@ -37,6 +37,7 @@ model User {
   name         String
   role         Role          @default(INSPECTOR)
   signature    String?       // Base64 encoded signature image drawn via signature pad
+  email        String?       // Email for notifications
   customerId   String?       // For Supervisor and Operator
   customer     Customer?     @relation(fields: [customerId], references: [id])
   createdAt    DateTime      @default(now())
@@ -67,7 +68,8 @@ model Customer {
   code      String?  @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  machines  String[] @default([])
+  machines       String[] @default([])
+  activeMachines String[] @default([])
   parts     Part[]
   users     User[]
   inspectionTransactions InspectionTransaction[]

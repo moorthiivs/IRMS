@@ -18,6 +18,7 @@ export const usersService = {
     name: string;
     role: 'ADMIN' | 'INSPECTOR' | 'SUPERVISOR' | 'OPERATOR';
     customerId?: string | null;
+    email?: string;
   }): Promise<User> => {
     const { data } = await api.post('/users', userData);
     return data;
@@ -29,6 +30,7 @@ export const usersService = {
     role?: 'ADMIN' | 'INSPECTOR' | 'SUPERVISOR' | 'OPERATOR';
     customerId?: string | null;
     signature?: string;
+    email?: string;
   }): Promise<User> => {
     const { data } = await api.put(`/users/${id}`, userData);
     return data;
