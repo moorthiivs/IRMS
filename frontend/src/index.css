@@ -2,6 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'Inter';
+  src: url('./fonts/Inter_Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('./fonts/Inter_Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'PlusJakartaSans';
+  src: url('./fonts/PlusJakartaSans-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'PlusJakartaSans';
+  src: url('./fonts/PlusJakartaSans-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 @layer base {
   :root {
     --background: 222.2 84% 4.9%;
@@ -28,14 +60,14 @@
 }
 
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--app-font-family, 'Inter'), sans-serif;
   background-color: var(--mantine-color-body);
   color: var(--mantine-color-text);
   -webkit-tap-highlight-color: transparent;
 }
 
 h1, h2, h3, h4, .font-display {
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--app-font-family, 'Inter'), sans-serif;
 }
 
 /* Custom Scrollbars */

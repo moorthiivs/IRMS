@@ -39,7 +39,7 @@ export const inspectionService = {
     return data;
   },
 
-  getRecent: async (filters?: { status?: string | null; approval?: string | null; date?: string | null; shiftId?: string | null; partId?: string | null; operationId?: string | null }): Promise<InspectionTransaction[]> => {
+  getRecent: async (filters?: { status?: string | null; approval?: string | null; date?: string | null; shiftId?: string | null; partId?: string | null; operationId?: string | null; hasMc?: string | null }): Promise<InspectionTransaction[]> => {
     const params: any = {};
     if (filters?.status) params.status = filters.status;
     if (filters?.approval) params.approval = filters.approval;
@@ -47,12 +47,18 @@ export const inspectionService = {
     if (filters?.shiftId) params.shiftId = filters.shiftId;
     if (filters?.partId) params.partId = filters.partId;
     if (filters?.operationId) params.operationId = filters.operationId;
+    if (filters?.hasMc) params.hasMc = filters.hasMc;
     const { data } = await api.get('/inspections/recent', { params });
     return data;
   },
 
   getById: async (id: string): Promise<InspectionTransaction> => {
     const { data } = await api.get(`/inspections/${id}`);
+    return data;
+  },
+
+  getDailyOptions: async (params: { date?: string; customerId?: string }): Promise<{ partIds: string[]; operationIds: string[]; mcNos: string[] }> => {
+    const { data } = await api.get('/inspections/daily-options', { params });
     return data;
   },
 

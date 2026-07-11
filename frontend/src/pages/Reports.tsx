@@ -29,10 +29,16 @@ export function Reports() {
 
   // History Tab filter states
   const [historyCustomer, setHistoryCustomer] = useState<string | null>(null);
-  const [historyDate, setHistoryDate] = useState<Date | null>(null);
+  const [historyDate, setHistoryDate] = useState<Date | null>(() => {
+    const d = searchParams.get('date');
+    if (d === 'today') return new Date();
+    if (d) return new Date(d);
+    return null;
+  });
   const [historyShift, setHistoryShift] = useState<string | null>(null);
   const [historyPart, setHistoryPart] = useState<string | null>(null);
   const [historyOp, setHistoryOp] = useState<string | null>(null);
+  const [historyHasMc, setHistoryHasMc] = useState<boolean>(searchParams.get('hasMc') === 'true');
 
   // Report filter states
   const [reportCustomer, setReportCustomer] = useState<string | null>(null);
@@ -73,7 +79,8 @@ export function Reports() {
         date: formattedDate,
         shiftId: historyShift || undefined,
         partId: historyPart || undefined,
-        operationId: historyOp || undefined
+        operationId: historyOp || undefined,
+        hasMc: historyHasMc ? 'true' : undefined
       });
     },
   });
@@ -95,14 +102,35 @@ export function Reports() {
   });
 
   const filteredHistoryParts = historyCustomer ? parts.filter((p: any) => p.customerId === historyCustomer) : parts;
-  const filteredReportParts = reportCustomer ? parts.filter((p: any) => p.customerId === reportCustomer) : parts;
+  
+  // Fetch available options for the selected date and customer
+  const { data: dailyOptions } = useQuery({
+    queryKey: ['daily-options', selectedDate, reportCustomer],
+    queryFn: () => {
+      const formattedDate = selectedDate ? 
+        `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}` 
+        : undefined;
+      return inspectionService.getDailyOptions({
+        date: formattedDate,
+        customerId: reportCustomer || undefined
+      });
+    },
+    enabled: !!selectedDate // Only fetch if we have a date selected
+  });
+
+  const filteredReportParts = (reportCustomer ? parts.filter((p: any) => p.customerId === reportCustomer) : parts)
+    .filter((p: any) => dailyOptions?.partIds ? dailyOptions.partIds.includes(p.id) : false);
+
   const reportCustomerData = customers.find((c: any) => c.id === reportCustomer);
-  const reportCustomerMachines = reportCustomerData?.machines || [];
+  
+  // Use dailyOptions mcNos if available and filtering, otherwise fallback to customer machines
+  const reportCustomerMachines = dailyOptions?.mcNos ? dailyOptions.mcNos : (reportCustomerData?.machines || []);
 
   const { data: operations = [] } = useQuery({
     queryKey: ['operations', selectedPart],
     queryFn: () => masterDataService.getOperationsByPart(selectedPart!),
-    enabled: !!selectedPart
+    enabled: !!selectedPart,
+    select: (data) => data.filter(o => !dailyOptions?.operationIds || dailyOptions.operationIds.includes(o.id))
   });
 
   const { data: historyOperations = [] } = useQuery({
@@ -696,6 +724,7 @@ export function Reports() {
                     setHistoryShift(null);
                     setHistoryPart(null);
                     setHistoryOp(null);
+                    setHistoryHasMc(false);
                   }}
                 >
                   Clear Filters
@@ -1079,7 +1108,7 @@ export function Reports() {
                 onChange={(val) => setSelectedMcNo(val || '')}
                 clearable
                 searchable
-                disabled={!reportCustomer || reportCustomerMachines.length === 0}
+                disabled={reportCustomerMachines.length === 0}
               />
               <Button 
                 onClick={handleGenerateReport} 

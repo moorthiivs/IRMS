@@ -1,14 +1,38 @@
 import { useState } from 'react';
-import { Title, SimpleGrid, Paper, Text, Group, Select, Button, Table, Badge, Skeleton } from '@mantine/core';
+import { Title, SimpleGrid, Paper, Text, Select, Button, Skeleton } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardCheck, CheckCircle2, XCircle, Clock, Play, FileCheck, Building2, Package, TrendingUp } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { ClipboardCheck, CheckCircle2, XCircle, Clock, Play, FileCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Chart from 'react-apexcharts';
 import { inspectionService } from '../services/inspection.service';
 import { masterDataService } from '../services/master-data.service';
 import { useAuthStore } from '../store/auth-store';
-import { TableSkeleton } from '../components/TableSkeleton';
+
+export function MetricCard({ title, value, icon: Icon, isNegative, onClick }: any) {
+  return (
+    <motion.div whileHover={{ scale: 1.02 }} transition={{ type: 'spring', stiffness: 400, damping: 10 }}>
+      <Paper 
+        withBorder 
+        p="sm" 
+        radius="md" 
+        className={`cursor-pointer transition-colors hover:bg-gray-50 h-full ${onClick ? 'hover:shadow-md' : ''}`}
+        onClick={onClick}
+      >
+        <div className="flex items-center justify-between mb-1">
+          <Text size="xs" c="dimmed" fw={600} className="uppercase tracking-wider truncate">{title}</Text>
+          {Icon && <Icon size={14} className="text-gray-400" />}
+        </div>
+        <div className="flex items-baseline gap-2">
+          <Text size="xl" fw={700} className={isNegative ? 'text-red-600' : 'text-gray-800'}>
+            {value}
+          </Text>
+        </div>
+      </Paper>
+    </motion.div>
+  );
+}
 
 export function Dashboard() {
   const { user, appMode } = useAuthStore();
@@ -363,261 +387,278 @@ export function Dashboard() {
 
   const trendChart = buildTrendChart();
 
+  const customerDonut = (() => {
+    if (!data?.customerSummary) return null;
+    const items: any[] = Object.values(data.customerSummary);
+    if (items.length === 0) return null;
+    return {
+      series: items.map(c => c.total),
+      options: {
+        chart: { type: 'donut' as const },
+        labels: items.map(c => c.name),
+        legend: { position: 'bottom' as const, fontSize: '12px', itemMargin: { horizontal: 8, vertical: 4 } },
+        plotOptions: { pie: { donut: { size: '75%' } } },
+        stroke: { width: 2, colors: ['#fff'] },
+        colors: ['#339af0', '#51cf66', '#fcc419', '#ff922b', '#ff6b6b', '#cc5de8', '#845ef7', '#20c997'],
+        tooltip: { theme: 'light' as const }
+      }
+    };
+  })();
+
+  const partDonut = (() => {
+    if (!data?.partSummary) return null;
+    const items: any[] = Object.values(data.partSummary);
+    if (items.length === 0) return null;
+    return {
+      series: items.map(p => p.total),
+      options: {
+        chart: { type: 'donut' as const },
+        labels: items.map(p => p.partNumber),
+        legend: { position: 'bottom' as const, fontSize: '12px', itemMargin: { horizontal: 8, vertical: 4 } },
+        plotOptions: { pie: { donut: { size: '75%' } } },
+        stroke: { width: 2, colors: ['#fff'] },
+        colors: ['#20c997', '#845ef7', '#ff6b6b', '#339af0', '#fcc419', '#51cf66', '#ff922b', '#cc5de8'],
+        tooltip: { theme: 'light' as const }
+      }
+    };
+  })();
+
   return (
-    <div>
-      <div className="mb-6">
-        <Title order={2}>Dashboard</Title>
-        <Text c="dimmed">Welcome back, {user?.name}</Text>
+    <div className="bg-gradient-to-b from-gray-50 to-gray-100 min-h-[calc(100vh-100px)] rounded-xl border border-gray-100 shadow-sm p-4 lg:p-6">
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <Title order={3} size="h4" className="text-gray-800 tracking-tight font-display">Dashboard</Title>
+          <Text size="xs" c="dimmed">Welcome back, {user?.name}</Text>
+        </div>
       </div>
 
-      {/* Stat Cards */}
-      <SimpleGrid cols={{ base: 1, sm: 2, lg: 5 }} spacing="md">
-        {stats.map((stat) => (
-          <Paper
-            withBorder
-            p="md"
-            radius="md"
-            key={stat.title}
-            onClick={stat.to ? () => navigate(stat.to!) : undefined}
-            style={{
-              cursor: stat.to ? 'pointer' : 'default',
-              transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-            }}
-            className={stat.to ? 'hover:shadow-md hover:-translate-y-0.5' : ''}
-          >
-            <Group justify="space-between">
-              <Text size="xs" c="dimmed" className="uppercase font-bold">
-                {stat.title}
-              </Text>
-              <stat.icon className={`text-${stat.color}-500`} size={20} />
-            </Group>
-
-            <Group align="flex-end" gap="xs" mt={25}>
-              <div className="text-3xl font-bold">
-                {isLoading ? <Skeleton height={36} width={60} radius="sm" /> : stat.value}
-              </div>
-            </Group>
-          </Paper>
+      {/* Top Section: High-Density 10-Block Grid */}
+      <SimpleGrid cols={{ base: 2, sm: 3, md: 5, lg: 5 }} spacing="xs" className="mb-4">
+        {stats.map((stat, index) => (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: index * 0.05 }} key={index}>
+            <MetricCard {...stat} index={index} />
+          </motion.div>
         ))}
+
+        {user?.role === 'ADMIN' && (
+          <>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 5 * 0.05 }}>
+              <MetricCard 
+                title="Total M/C Configured" 
+                value={isLoading ? <Skeleton height={24} width={40} /> : data?.machineSummary?.totalMcCount || 0} 
+              />
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 6 * 0.05 }}>
+              <MetricCard 
+                title="Active M/C Today" 
+                value={isLoading ? <Skeleton height={24} width={40} /> : data?.machineSummary?.activeMcCount || 0}
+                onClick={() => navigate('/reports?hasMc=true&date=today')}
+              />
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 7 * 0.05 }}>
+              <MetricCard 
+                title="Total M/C Reports" 
+                value={isLoading ? <Skeleton height={24} width={40} /> : data?.machineSummary?.activeMcReportsTotal || 0}
+                onClick={() => navigate('/reports?hasMc=true&date=today')}
+              />
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 8 * 0.05 }}>
+              <MetricCard 
+                title="M/C Passed" 
+                value={isLoading ? <Skeleton height={24} width={40} /> : data?.machineSummary?.activeMcReportsPassed || 0}
+                onClick={() => navigate('/reports?hasMc=true&date=today&status=PASSED')}
+                color="green"
+                isNegative={false}
+              />
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 9 * 0.05 }}>
+              <MetricCard 
+                title="M/C Failed" 
+                value={isLoading ? <Skeleton height={24} width={40} /> : data?.machineSummary?.activeMcReportsFailed || 0}
+                onClick={() => navigate('/reports?hasMc=true&date=today&status=REJECTED')}
+                isNegative={true}
+              />
+            </motion.div>
+          </>
+        )}
       </SimpleGrid>
 
-      {/* Row 2: Customer-wise + Part-wise summaries */}
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Paper withBorder p="md" radius="md" style={{ minHeight: 300 }}>
-          <Group gap="sm" mb="md">
-            <Building2 size={20} className="text-blue-500" />
-            <Title order={4}>Customer Summary (Today)</Title>
-          </Group>
-          {isLoading ? (
-            <TableSkeleton rows={3} />
-          ) : data?.customerSummary && Object.keys(data.customerSummary).length > 0 ? (
-            <Table striped highlightOnHover verticalSpacing="sm">
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Customer</Table.Th>
-                  <Table.Th className="text-center">Total</Table.Th>
-                  <Table.Th className="text-center">Passed</Table.Th>
-                  <Table.Th className="text-center">Rejected</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {Object.entries(data.customerSummary).map(([key, summary]: [string, any]) => (
-                  <Table.Tr key={key}>
-                    <Table.Td>
-                      <Group gap="xs">
-                        <Building2 size={14} className="text-gray-400" />
-                        <Text fw={600} size="sm">{summary.name}</Text>
-                      </Group>
-                    </Table.Td>
-                    <Table.Td className="text-center">
-                      <Text fw={600}>{summary.total}</Text>
-                    </Table.Td>
-                    <Table.Td className="text-center">
-                      <Badge color="green" variant="light">{summary.pass}</Badge>
-                    </Table.Td>
-                    <Table.Td className="text-center">
-                      <Badge color="red" variant="light">{summary.fail}</Badge>
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          ) : (
-            <Text c="dimmed" size="sm">No customer data recorded today.</Text>
-          )}
-        </Paper>
+      {/* Middle Section: 3 Columns */}
+      <SimpleGrid cols={{ base: 1, md: 3 }} spacing="lg" className="mb-6">
+        {/* Top Customers (Donut) */}
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, delay: 0.2 }}>
+          <Paper withBorder p="md" radius="xl" style={{ backgroundColor: '#fff', minHeight: 260 }} className="shadow-sm">
+            <Text size="sm" fw={700} c="gray.7" className="mb-4">Customer Share (Today)</Text>
+            {isLoading ? (
+              <Skeleton height={180} />
+            ) : customerDonut ? (
+              <div className="w-full h-[220px]">
+                <Chart options={customerDonut.options} series={customerDonut.series} type="donut" height="100%" width="100%" />
+              </div>
+            ) : (
+              <Text c="dimmed" size="sm" className="text-center mt-12">No data today</Text>
+            )}
+          </Paper>
+        </motion.div>
 
-        <Paper withBorder p="md" radius="md" style={{ minHeight: 300 }}>
-          <Group gap="sm" mb="md">
-            <Package size={20} className="text-teal-500" />
-            <Title order={4}>Part Summary (Today)</Title>
-          </Group>
-          {isLoading ? (
-            <TableSkeleton rows={3} />
-          ) : data?.partSummary && Object.keys(data.partSummary).length > 0 ? (
-            <Table striped highlightOnHover verticalSpacing="sm">
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Part No</Table.Th>
-                  <Table.Th>Customer</Table.Th>
-                  <Table.Th className="text-center">Total</Table.Th>
-                  <Table.Th className="text-center">Passed</Table.Th>
-                  <Table.Th className="text-center">Rejected</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {Object.entries(data.partSummary).map(([key, summary]: [string, any]) => (
-                  <Table.Tr key={key}>
-                    <Table.Td>
-                      <Text fw={600} size="sm">{summary.partNumber}</Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size="xs" c="dimmed">{summary.customerName || '—'}</Text>
-                    </Table.Td>
-                    <Table.Td className="text-center">
-                      <Text fw={600}>{summary.total}</Text>
-                    </Table.Td>
-                    <Table.Td className="text-center">
-                      <Badge color="green" variant="light">{summary.pass}</Badge>
-                    </Table.Td>
-                    <Table.Td className="text-center">
-                      <Badge color="red" variant="light">{summary.fail}</Badge>
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          ) : (
-            <Text c="dimmed" size="sm">No part data recorded today.</Text>
-          )}
-        </Paper>
-      </div>
+        {/* Recent Activity Bar Chart */}
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, delay: 0.3 }}>
+          <Paper withBorder p="md" radius="xl" style={{ backgroundColor: '#fff', minHeight: 260 }} className="shadow-sm">
+            <Text size="sm" fw={700} c="gray.7" className="mb-4">Recent Activity (7 Days)</Text>
+            {isLoading ? (
+              <Skeleton height={180} />
+            ) : data?.recentActivity ? (
+              <div className="w-full h-[220px]">
+                <Chart
+                  options={{
+                    ...data.recentActivity.options,
+                    chart: { ...data.recentActivity.options.chart, toolbar: { show: false }, parentHeightOffset: 0 },
+                    plotOptions: { bar: { columnWidth: '50%', borderRadius: 4 } },
+                    tooltip: { theme: 'light' as const },
+                    grid: { show: false, padding: { top: 0, right: 0, bottom: 0, left: 0 } },
+                    xaxis: { ...data.recentActivity.options.xaxis, labels: { show: false }, axisBorder: { show: false }, axisTicks: { show: false } },
+                    yaxis: { ...data.recentActivity.options.yaxis, labels: { show: false } }
+                  }}
+                  series={data.recentActivity.series}
+                  type="bar"
+                  height="100%"
+                  width="100%"
+                />
+              </div>
+            ) : (
+              <Text c="dimmed" size="sm" className="text-center mt-12">No data</Text>
+            )}
+          </Paper>
+        </motion.div>
 
-      {/* Row 3: Recent Activity + Shift Summary */}
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Paper withBorder p="md" radius="md" style={{ minHeight: 350 }}>
-          <Title order={4} mb="md">Recent Activity (Last 7 Days)</Title>
-          {isLoading ? (
-            <Skeleton height={260} radius="md" />
-          ) : data?.recentActivity ? (
-            <div style={{ width: '100%', height: 260 }}>
-              <Chart
-                options={data.recentActivity.options}
-                series={data.recentActivity.series}
-                type={data.recentActivity.type || 'bar'}
-                height={260}
+        {/* Top Parts (Donut) */}
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, delay: 0.4 }}>
+          <Paper withBorder p="md" radius="xl" style={{ backgroundColor: '#fff', minHeight: 260 }} className="shadow-sm">
+            <Text size="sm" fw={700} c="gray.7" className="mb-4">Part Share (Today)</Text>
+            {isLoading ? (
+              <Skeleton height={180} />
+            ) : partDonut ? (
+              <div className="w-full h-[220px]">
+                <Chart options={partDonut.options} series={partDonut.series} type="donut" height="100%" width="100%" />
+              </div>
+            ) : (
+              <Text c="dimmed" size="sm" className="text-center mt-12">No data today</Text>
+            )}
+          </Paper>
+        </motion.div>
+      </SimpleGrid>
+
+      {/* Bottom Section: Progress Bars & Large Trend Chart */}
+      <SimpleGrid cols={{ base: 1, lg: 3 }} spacing="lg">
+        {/* Status Code Stats equivalent (Shift Progress Bars) */}
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, delay: 0.5 }}>
+          <Paper withBorder p="md" radius="xl" style={{ backgroundColor: '#fff', height: '100%' }} className="shadow-sm">
+            <Text size="sm" fw={700} c="gray.7" className="mb-4">Shift Status Codes</Text>
+            {isLoading ? (
+              <div className="space-y-4"><Skeleton height={20}/><Skeleton height={20}/></div>
+            ) : data?.shiftSummary && Object.keys(data.shiftSummary).length > 0 ? (
+              <div className="space-y-4 overflow-y-auto" style={{ maxHeight: 250 }}>
+                {Object.entries(data.shiftSummary).map(([shiftName, summary]: [string, any]) => {
+                  const passPct = summary.total > 0 ? (summary.pass / summary.total) * 100 : 0;
+                  const failPct = summary.total > 0 ? (summary.fail / summary.total) * 100 : 0;
+                  return (
+                    <div key={shiftName}>
+                      <div className="flex justify-between text-xs font-semibold mb-1 text-gray-700">
+                        <span>{shiftName}</span>
+                        <span className="text-gray-500">{summary.total} Total</span>
+                      </div>
+                      <div className="flex h-3 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                        {passPct > 0 && (
+                          <div style={{ width: `${passPct}%` }} className="bg-green-500 flex items-center justify-center text-[9px] text-white font-bold px-1" title={`${summary.pass} Passed`}>
+                            {passPct > 10 ? `${passPct.toFixed(0)}%` : ''}
+                          </div>
+                        )}
+                        {failPct > 0 && (
+                          <div style={{ width: `${failPct}%` }} className="bg-red-500 flex items-center justify-center text-[9px] text-white font-bold px-1" title={`${summary.fail} Failed`}>
+                            {failPct > 10 ? `${failPct.toFixed(0)}%` : ''}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex justify-between text-[10px] mt-1 text-gray-500">
+                        <span>Pass: {summary.pass}</span>
+                        <span>Fail: {summary.fail}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <Text c="dimmed" size="sm" className="text-center mt-8">No shift data</Text>
+            )}
+          </Paper>
+        </motion.div>
+
+        {/* Full Parameter Trend Chart spanning 2 columns */}
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, delay: 0.6 }} style={{ gridColumn: 'span 2' }}>
+          <Paper withBorder p="md" radius="xl" style={{ backgroundColor: '#fff', height: '100%' }} className="shadow-sm">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+              <Text size="sm" fw={700} c="gray.7">Parameter Trend Analysis</Text>
+              
+              <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                <Select
+                  placeholder="Part"
+                  size="xs"
+                  searchable
+                  radius="md"
+                  data={parts.map(p => ({ value: p.id, label: p.partNumber }))}
+                value={trendPart}
+                onChange={(v) => { setTrendPart(v); setTrendOp(null); setTrendParam(null); }}
+                style={{ width: 120 }}
+              />
+              <Select
+                placeholder="Op"
+                size="xs"
+                disabled={!trendPart}
+                data={trendOperations.map((o: any) => ({ value: o.id, label: o.operationNumber }))}
+                value={trendOp}
+                onChange={(v) => { setTrendOp(v); setTrendParam(null); }}
+                style={{ width: 100 }}
+              />
+              <Select
+                placeholder="Param"
+                size="xs"
+                clearable
+                disabled={!trendOp}
+                data={trendParameters.map((p: any) => ({ value: p.id, label: p.parameterName }))}
+                value={trendParam}
+                onChange={setTrendParam}
+                style={{ width: 120 }}
+              />
+              <DatePickerInput
+                type="range"
+                placeholder="Date"
+                size="xs"
+                clearable
+                value={trendDateRange}
+                onChange={setTrendDateRange}
+                style={{ width: 160 }}
               />
             </div>
-          ) : (
-            <Text c="dimmed" size="sm">No recent activity data available.</Text>
-          )}
-        </Paper>
+          </div>
 
-        <Paper withBorder p="md" radius="md" style={{ minHeight: 350 }}>
-          <Title order={4} mb="md">Shift Summary (Today)</Title>
-          {isLoading ? (
-            <div className="p-4"><TableSkeleton rows={3} /></div>
-          ) : data?.shiftSummary && Object.keys(data.shiftSummary).length > 0 ? (
-            <div className="overflow-x-auto">
-              <Table striped highlightOnHover verticalSpacing="sm">
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>Shift</Table.Th>
-                    <Table.Th className="text-center">Total Inspections</Table.Th>
-                    <Table.Th className="text-center">Passed</Table.Th>
-                    <Table.Th className="text-center">Rejected</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {Object.entries(data.shiftSummary).map(([shiftName, summary]: [string, any]) => (
-                    <Table.Tr key={shiftName}>
-                      <Table.Td className="font-semibold">{shiftName}</Table.Td>
-                      <Table.Td className="text-center">{summary.total}</Table.Td>
-                      <Table.Td className="text-center">
-                        <Badge color="green" variant="light">{summary.pass}</Badge>
-                      </Table.Td>
-                      <Table.Td className="text-center">
-                        <Badge color="red" variant="light">{summary.fail}</Badge>
-                      </Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
+          {!trendPart || !trendOp ? (
+            <div className="text-center py-10">
+              <Text c="dimmed" size="xs">Select a Part and Operation to see trends</Text>
+            </div>
+          ) : isTrendFetching ? (
+            <Skeleton height={240} />
+          ) : trendChart ? (
+            <div style={{ width: '100%', height: 260, marginTop: -10 }}>
+              <Chart options={trendChart.options} series={trendChart.series} type="area" height={260} />
             </div>
           ) : (
-            <Text c="dimmed" size="sm">No shift transactions recorded today.</Text>
+            <div className="text-center py-10">
+              <Text c="dimmed" size="xs">No trend data available.</Text>
+            </div>
           )}
         </Paper>
-      </div>
-
-      {/* Row 4: Parameter Trend Chart */}
-      <Paper withBorder p="md" radius="md" mt="xl">
-        <Group gap="sm" mb="md">
-          <TrendingUp size={20} className="text-violet-500" />
-          <Title order={4}>Parameter Trend Analysis</Title>
-        </Group>
-        <Text size="xs" c="dimmed" mb="md">
-          Select a Part and Operation to view daily Min / Max / Avg readings over time. Control limits are shown as dashed lines.
-        </Text>
-
-        <SimpleGrid cols={{ base: 1, sm: 2, lg: 5 }} spacing="sm" mb="md">
-          <Select
-            placeholder="Select Part"
-            size="xs"
-            searchable
-            data={parts.map(p => ({ value: p.id, label: p.partNumber }))}
-            value={trendPart}
-            onChange={(v) => { setTrendPart(v); setTrendOp(null); setTrendParam(null); }}
-          />
-          <Select
-            placeholder="Select Operation"
-            size="xs"
-            disabled={!trendPart}
-            data={trendOperations.map((o: any) => ({ value: o.id, label: o.operationNumber }))}
-            value={trendOp}
-            onChange={(v) => { setTrendOp(v); setTrendParam(null); }}
-          />
-          <Select
-            placeholder="All Parameters"
-            size="xs"
-            clearable
-            disabled={!trendOp}
-            data={trendParameters.map((p: any) => ({ value: p.id, label: p.parameterName }))}
-            value={trendParam}
-            onChange={setTrendParam}
-          />
-          <DatePickerInput
-            type="range"
-            placeholder="Date range (default: 7 days)"
-            size="xs"
-            clearable
-            value={trendDateRange}
-            onChange={setTrendDateRange}
-          />
-        </SimpleGrid>
-
-        {!trendPart || !trendOp ? (
-          <div className="text-center py-12">
-            <TrendingUp size={40} className="mx-auto text-gray-300 mb-3" />
-            <Text c="dimmed" size="sm">Select a Part and Operation to see trends</Text>
-          </div>
-        ) : isTrendFetching ? (
-          <Skeleton height={320} radius="md" />
-        ) : trendChart ? (
-          <div style={{ width: '100%', height: 350 }}>
-            <Chart
-              options={trendChart.options}
-              series={trendChart.series}
-              type="area"
-              height={350}
-            />
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <Text c="dimmed" size="sm">No trend data available for this selection.</Text>
-          </div>
-        )}
-      </Paper>
+        </motion.div>
+      </SimpleGrid>
     </div>
   );
 }

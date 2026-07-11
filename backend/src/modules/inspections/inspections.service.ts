@@ -216,7 +216,7 @@ export class InspectionsService {
     return transaction;
   }
 
-  async getRecentInspections(user: any, status?: string, approval?: string, dateStr?: string, shiftId?: string, partId?: string, operationId?: string) {
+  async getRecentInspections(user: any, status?: string, approval?: string, dateStr?: string, shiftId?: string, partId?: string, operationId?: string, hasMc?: string) {
     const where: any = {};
     if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR' || user.role === 'INSPECTOR') && user.customerId) {
       where.customerId = user.customerId;
@@ -249,6 +249,10 @@ export class InspectionsService {
 
     if (operationId) {
       where.operationId = operationId;
+    }
+
+    if (hasMc === 'true') {
+      where.mcNo = { not: null };
     }
 
     const query: any = {
@@ -446,6 +450,20 @@ export class InspectionsService {
     const passedData = Array.from(activityMap.values()).map(d => d.passed);
     const rejectedData = Array.from(activityMap.values()).map(d => d.rejected);
 
+    // --- MACHINE SUMMARY ---
+    const customersForMc = await this.prisma.customer.findMany({
+      where: whereBase.customerId ? { id: whereBase.customerId } : undefined,
+      select: { machines: true }
+    });
+    const totalMcCount = customersForMc.reduce((sum, c) => sum + (c.machines ? c.machines.length : 0), 0);
+
+    const activeMcTransactions = transactionsToday.filter(tx => tx.mcNo !== null && tx.mcNo !== undefined && tx.mcNo.trim() !== '');
+    const activeMcSet = new Set(activeMcTransactions.map(t => t.mcNo));
+    const activeMcCount = activeMcSet.size;
+    const activeMcReportsTotal = activeMcTransactions.length;
+    const activeMcReportsPassed = activeMcTransactions.filter(t => t.status === TransactionStatus.PASSED).length;
+    const activeMcReportsFailed = activeMcTransactions.filter(t => t.status === TransactionStatus.REJECTED).length;
+
     const dynamicChart = {
       type: 'bar',
       series: [
@@ -503,7 +521,54 @@ export class InspectionsService {
       customerSummary,
       partSummary,
       recentActivity: dynamicChart,
+      machineSummary: {
+        totalMcCount,
+        activeMcCount,
+        activeMcReportsTotal,
+        activeMcReportsPassed,
+        activeMcReportsFailed,
+      }
     };
+  }
+
+  async getDailyOptions(user: any, dateStr: string, customerId?: string) {
+    const targetDate = dateStr ? new Date(dateStr) : new Date();
+    
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const whereBase: any = {
+      inspectionTimestamp: {
+        gte: startOfDay,
+        lte: endOfDay,
+      },
+    };
+
+    if (customerId) {
+      whereBase.customerId = customerId;
+    }
+
+    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR' || user.role === 'INSPECTOR') && user.customerId) {
+      whereBase.customerId = user.customerId;
+    }
+
+    const transactions = await this.prisma.inspectionTransaction.findMany({
+      where: whereBase,
+      select: {
+        partId: true,
+        operationId: true,
+        mcNo: true,
+      },
+      distinct: ['partId', 'operationId', 'mcNo'],
+    });
+
+    const partIds = [...new Set(transactions.map(t => t.partId))];
+    const operationIds = [...new Set(transactions.map(t => t.operationId))];
+    const mcNos = [...new Set(transactions.map(t => t.mcNo).filter(Boolean))];
+
+    return { partIds, operationIds, mcNos };
   }
 
   async getDailyReport(user: any, partId: string, operationId: string, mcNo?: string, dateStr?: string) {

@@ -56,8 +56,9 @@ export class InspectionsController {
     @Query('shiftId') shiftId?: string,
     @Query('partId') partId?: string,
     @Query('operationId') operationId?: string,
+    @Query('hasMc') hasMc?: string,
   ) {
-    return this.inspectionsService.getRecentInspections(req.user, status, approval, date, shiftId, partId, operationId);
+    return this.inspectionsService.getRecentInspections(req.user, status, approval, date, shiftId, partId, operationId, hasMc);
   }
 
   @Get('trends')
@@ -70,6 +71,15 @@ export class InspectionsController {
     @Query('endDate') endDate?: string,
   ) {
     return this.inspectionsService.getTrends(req.user, partId, operationId, days ? parseInt(days, 10) : 7, startDate, endDate);
+  }
+
+  @Get('daily-options')
+  async getDailyOptions(
+    @Request() req,
+    @Query('date') date: string,
+    @Query('customerId') customerId: string,
+  ) {
+    return this.inspectionsService.getDailyOptions(req.user, date, customerId);
   }
 
   @Get('daily')

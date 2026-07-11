@@ -11,11 +11,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { settingsService } from '../services/settings.service';
 import { notifications } from '@mantine/notifications';
 import api from '../lib/axios';
+import { useAppStore } from '../store/app-store';
 
 export function Settings() {
   const queryClient = useQueryClient();
   const { colorScheme, setColorScheme } = useMantineColorScheme();
   const computedColorScheme = useComputedColorScheme('light');
+  const { fontFamily, setFontFamily } = useAppStore();
 
   const formatVersion = (v: string | null) => {
     if (!v || v === 'built-in') return 'v1.0.0 (Built-in)';
@@ -252,6 +254,24 @@ export function Settings() {
                   { label: <Group gap="xs" wrap="nowrap" justify="center"><Moon size={16} /> Dark</Group>, value: 'dark' },
                   { label: <Group gap="xs" wrap="nowrap" justify="center"><Monitor size={16} /> Auto</Group>, value: 'auto' },
                 ]}
+              />
+            </Group>
+          </Paper>
+
+          <Paper withBorder p="md" radius="md" mt="md">
+            <Group justify="space-between" align="center">
+              <div>
+                <Text fw={600} size="sm">Typography Font</Text>
+                <Text size="xs" c="dimmed">Select the font family used across the application</Text>
+              </div>
+              <Select
+                data={[
+                  { value: 'Inter', label: 'Inter' },
+                  { value: 'PlusJakartaSans', label: 'Plus Jakarta Sans' },
+                ]}
+                value={fontFamily}
+                onChange={(val: string | null) => val && setFontFamily(val as 'Inter' | 'PlusJakartaSans')}
+                style={{ width: 200 }}
               />
             </Group>
           </Paper>

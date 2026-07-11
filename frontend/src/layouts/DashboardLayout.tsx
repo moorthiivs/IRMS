@@ -10,6 +10,7 @@ export function DashboardLayout() {
   const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
   const [desktopCollapsed, { toggle: toggleDesktop }] = useDisclosure(false);
   const { user, logout, appMode, setAppMode } = useAuthStore();
+
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -61,6 +62,7 @@ export function DashboardLayout() {
           </Group>
           
           <Group>
+
             <TopNavbar />
             <Menu shadow="md" width={200} position="bottom-end">
               <Menu.Target>
