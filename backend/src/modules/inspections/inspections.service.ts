@@ -308,16 +308,35 @@ export class InspectionsService {
     });
   }
 
-  async getDashboardData(user: any) {
+  async getDashboardData(user: any, customerId?: string, startDate?: string, endDate?: string) {
     const today = new Date();
-    const startOfDay = new Date(today);
+    let startOfDay = new Date(today);
     startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(today);
+    let endOfDay = new Date(today);
     endOfDay.setHours(23, 59, 59, 999);
+
+    if (startDate) {
+      startOfDay = new Date(startDate);
+      startOfDay.setHours(0, 0, 0, 0);
+    }
+    if (endDate) {
+      endOfDay = new Date(endDate);
+      endOfDay.setHours(23, 59, 59, 999);
+    } else if (startDate) {
+      endOfDay = new Date(startDate);
+      endOfDay.setHours(23, 59, 59, 999);
+    }
 
     const whereBase: any = {};
     if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR' || user.role === 'INSPECTOR') && user.customerId) {
       whereBase.customerId = user.customerId;
+    } else if (customerId) {
+      whereBase.customerId = customerId;
+    }
+
+    // Apply date range filter to all metrics if a custom date is provided
+    if (startDate || endDate) {
+      whereBase.inspectionTimestamp = { gte: startOfDay, lte: endOfDay };
     }
 
     const [
@@ -408,15 +427,17 @@ export class InspectionsService {
     const totalExpectedToday = partOpsCount * activeShiftsCount * 2;
     const pendingCount = Math.max(0, totalExpectedToday - todayInspections);
 
-    // Get last 7 days activity
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    // Get last 7 days activity leading up to endOfDay
+    const sevenDaysAgo = new Date(endOfDay);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
     sevenDaysAgo.setHours(0, 0, 0, 0);
 
     const recentTransactions = await this.prisma.inspectionTransaction.findMany({
       where: {
+        ...whereBase, // also respect customer filter
         inspectionTimestamp: {
           gte: sevenDaysAgo,
+          lte: endOfDay,
         },
       },
       select: {
@@ -428,7 +449,7 @@ export class InspectionsService {
     const activityMap = new Map<string, { date: string; passed: number; rejected: number }>();
     
     for (let i = 6; i >= 0; i--) {
-      const d = new Date();
+      const d = new Date(endOfDay);
       d.setDate(d.getDate() - i);
       const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       activityMap.set(dateStr, { date: dateStr, passed: 0, rejected: 0 });
@@ -453,56 +474,37 @@ export class InspectionsService {
     // --- MACHINE SUMMARY ---
     const customersForMc = await this.prisma.customer.findMany({
       where: whereBase.customerId ? { id: whereBase.customerId } : undefined,
-      select: { machines: true }
+      select: { machines: true, activeMachines: true, activeMachinesDate: true }
     });
     const totalMcCount = customersForMc.reduce((sum, c) => sum + (c.machines ? c.machines.length : 0), 0);
 
+    const now = new Date();
+    let configuredActiveMcCount = 0;
+    for (const c of customersForMc) {
+      if (c.activeMachinesDate) {
+         const d = new Date(c.activeMachinesDate);
+         let resetTime = new Date(d);
+         resetTime.setHours(9, 0, 0, 0);
+         if (d.getHours() >= 9) {
+            resetTime.setDate(resetTime.getDate() + 1);
+         }
+         
+         if (now <= resetTime) {
+            configuredActiveMcCount += (c.activeMachines ? c.activeMachines.length : 0);
+         }
+      }
+    }
+
     const activeMcTransactions = transactionsToday.filter(tx => tx.mcNo !== null && tx.mcNo !== undefined && tx.mcNo.trim() !== '');
-    const activeMcSet = new Set(activeMcTransactions.map(t => t.mcNo));
-    const activeMcCount = activeMcSet.size;
+    const activeMcCount = configuredActiveMcCount;
     const activeMcReportsTotal = activeMcTransactions.length;
     const activeMcReportsPassed = activeMcTransactions.filter(t => t.status === TransactionStatus.PASSED).length;
     const activeMcReportsFailed = activeMcTransactions.filter(t => t.status === TransactionStatus.REJECTED).length;
 
-    const dynamicChart = {
-      type: 'bar',
-      series: [
-        {
-          name: 'Passed',
-          data: passedData,
-        },
-        {
-          name: 'Rejected',
-          data: rejectedData,
-        },
-      ],
-      options: {
-        chart: {
-          id: 'recent-activity-chart',
-          toolbar: {
-            show: false,
-          },
-        },
-        colors: ['#40c057', '#fa5252'],
-        xaxis: {
-          categories: categories,
-          axisBorder: { show: false },
-          axisTicks: { show: false },
-        },
-        dataLabels: {
-          enabled: false,
-        },
-        grid: {
-          borderColor: '#f1f3f5',
-          strokeDashArray: 4,
-        },
-        plotOptions: {
-          bar: {
-            borderRadius: 4,
-            columnWidth: '55%',
-          },
-        },
-      },
+    const recentActivityRaw = {
+      categories,
+      passed: passedData,
+      rejected: rejectedData,
     };
 
     return {
@@ -520,7 +522,7 @@ export class InspectionsService {
       shiftSummary,
       customerSummary,
       partSummary,
-      recentActivity: dynamicChart,
+      recentActivity: recentActivityRaw,
       machineSummary: {
         totalMcCount,
         activeMcCount,

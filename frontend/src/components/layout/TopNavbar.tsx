@@ -1,5 +1,5 @@
-import { Group, Badge, Tooltip, Select, Button } from '@mantine/core';
-import { Clock, HardDrive, Building2, Cpu } from 'lucide-react';
+import { Group, Badge, Tooltip, Button } from '@mantine/core';
+import { Clock, HardDrive, Cpu } from 'lucide-react';
 import { useAuthStore } from '../../store/auth-store';
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,6 +11,7 @@ export function TopNavbar() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [machineSelectorOpened, setMachineSelectorOpened] = useState(false);
   const [activeMachines, setActiveMachines] = useState<string[]>([]);
+  const [activeMachinesDate, setActiveMachinesDate] = useState<Date | null>(null);
   const queryClient = useQueryClient();
 
 
@@ -47,55 +48,44 @@ export function TopNavbar() {
 
   useEffect(() => {
     setActiveMachines(selectedCustomer?.activeMachines || []);
+    setActiveMachinesDate(selectedCustomer?.activeMachinesDate ? new Date(selectedCustomer.activeMachinesDate) : null);
   }, [selectedCustomer]);
 
   return (
     <Group gap="sm" className="hidden md:flex">
-      {/* Customer Selector */}
-      <Select
-        placeholder="Customer"
-        data={customers.map((c: any) => ({ value: c.id, label: c.name }))}
-        value={selectedCustomerId}
-        onChange={(val) => {
-          setSelectedCustomerId(val);
-        }}
-        size="xs"
-        style={{ width: 160 }}
-        clearable={isAdmin}
-        disabled={!isAdmin && !!user?.customerId}
-        leftSection={<Building2 size={14} />}
-      />
-
       {/* Active Machines Selector */}
-      {selectedCustomerId && allMachines.length > 0 && (
-        <>
-          <Button
-            variant="light"
-            color="teal"
-            size="xs"
-            leftSection={<Cpu size={14} />}
-            onClick={() => setMachineSelectorOpened(true)}
-          >
-            M/C: {activeMachines.filter(m => allMachines.includes(m)).length}/{allMachines.length} Selected
-          </Button>
-          
-          <ActiveMachineSelectorModal 
-            opened={machineSelectorOpened}
-            onClose={() => {
-              setMachineSelectorOpened(false);
-              if (selectedCustomerId) {
-                masterDataService.updateCustomerActiveMachines(selectedCustomerId, activeMachines)
-                  .then(() => queryClient.invalidateQueries({ queryKey: ['customers'] }))
-                  .catch(console.error);
-              }
-            }}
-            allMachines={allMachines}
-            activeMachines={activeMachines}
-            setActiveMachines={setActiveMachines}
-            customerName={selectedCustomer?.name}
-          />
-        </>
-      )}
+      <Button
+        variant="light"
+        color="teal"
+        size="xs"
+        leftSection={<Cpu size={14} />}
+        onClick={() => setMachineSelectorOpened(true)}
+      >
+        {(selectedCustomerId && activeMachines.length > 0) 
+          ? `M/C: ${activeMachines.filter(m => allMachines.includes(m)).length}/${allMachines.length} Selected` 
+          : 'Select Machine'}
+      </Button>
+      
+      <ActiveMachineSelectorModal 
+        opened={machineSelectorOpened}
+        onClose={() => {
+          setMachineSelectorOpened(false);
+          if (selectedCustomerId) {
+            masterDataService.updateCustomerActiveMachines(selectedCustomerId, activeMachines, activeMachinesDate?.toISOString())
+              .then(() => queryClient.invalidateQueries({ queryKey: ['customers'] }))
+              .catch(console.error);
+          }
+        }}
+        allMachines={allMachines}
+        activeMachines={activeMachines}
+        setActiveMachines={setActiveMachines}
+        activeMachinesDate={activeMachinesDate}
+        setActiveMachinesDate={setActiveMachinesDate}
+        customers={customers}
+        selectedCustomerId={selectedCustomerId}
+        setSelectedCustomerId={setSelectedCustomerId}
+        isAdmin={isAdmin}
+      />
 
 
 

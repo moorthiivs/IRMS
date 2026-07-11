@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { 
   Modal, 
   Button, 
@@ -10,9 +10,10 @@ import {
   Checkbox,
   SimpleGrid,
   Divider,
-  Badge
+  Select
 } from '@mantine/core';
-import { Search, X } from 'lucide-react';
+import { DateTimePicker } from '@mantine/dates';
+import { Search, X, Building2, CalendarClock } from 'lucide-react';
 
 interface ActiveMachineSelectorModalProps {
   opened: boolean;
@@ -20,7 +21,12 @@ interface ActiveMachineSelectorModalProps {
   allMachines: string[];
   activeMachines: string[];
   setActiveMachines: (machines: string[]) => void;
-  customerName?: string;
+  activeMachinesDate: Date | null;
+  setActiveMachinesDate: (d: Date | null) => void;
+  customers: any[];
+  selectedCustomerId: string | null;
+  setSelectedCustomerId: (id: string | null) => void;
+  isAdmin: boolean;
 }
 
 export function ActiveMachineSelectorModal({ 
@@ -29,13 +35,29 @@ export function ActiveMachineSelectorModal({
   allMachines, 
   activeMachines, 
   setActiveMachines,
-  customerName
+  activeMachinesDate,
+  setActiveMachinesDate,
+  customers,
+  selectedCustomerId,
+  setSelectedCustomerId,
+  isAdmin
 }: ActiveMachineSelectorModalProps) {
   const [search, setSearch] = useState('');
 
   const filteredMachines = useMemo(() => {
     return allMachines.filter(m => m.toLowerCase().includes(search.toLowerCase()));
   }, [allMachines, search]);
+
+  useEffect(() => {
+    if (opened && !activeMachinesDate && selectedCustomerId) {
+      const d = new Date();
+      if (d.getHours() < 9) {
+        d.setDate(d.getDate() - 1);
+      }
+      d.setHours(9, 0, 0, 0);
+      setActiveMachinesDate(d);
+    }
+  }, [opened, activeMachinesDate, selectedCustomerId, setActiveMachinesDate]);
 
   const allFilteredSelected = filteredMachines.length > 0 && filteredMachines.every(m => activeMachines.includes(m));
   const someFilteredSelected = filteredMachines.some(m => activeMachines.includes(m));
@@ -67,14 +89,43 @@ export function ActiveMachineSelectorModal({
       title={
         <Group gap="sm">
           <Text fw={600} size="lg">Select Active Machines</Text>
-          {customerName && <Badge color="blue" variant="light">{customerName}</Badge>}
         </Group>
       }
       size="xl"
       centered
     >
-      <Group justify="space-between" mb="md">
-        <TextInput
+      <Group grow mb="lg" align="flex-start">
+        <Select
+          label="1. Select Customer"
+          placeholder="Select a customer first"
+          data={customers.map((c: any) => ({ value: c.id, label: c.name }))}
+          value={selectedCustomerId}
+          onChange={(val) => {
+            setSelectedCustomerId(val);
+            setActiveMachines([]);
+          }}
+          size="sm"
+          clearable={isAdmin}
+          disabled={!isAdmin && !!selectedCustomerId}
+          leftSection={<Building2 size={16} />}
+        />
+        
+        <DateTimePicker
+          label="2. Effective Date & Time"
+          placeholder="Pick date and time"
+          value={activeMachinesDate}
+          onChange={setActiveMachinesDate}
+          disabled={!selectedCustomerId || !isAdmin}
+          clearable={false}
+          size="sm"
+          leftSection={<CalendarClock size={16} />}
+        />
+      </Group>
+
+      {selectedCustomerId ? (
+        <>
+          <Group justify="space-between" mb="md">
+            <TextInput
           placeholder="Search machines..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -139,6 +190,10 @@ export function ActiveMachineSelectorModal({
           )}
         </ScrollArea>
       </Paper>
+      </>
+      ) : (
+        <Text c="dimmed" ta="center" py="xl">Please select a customer to view machines.</Text>
+      )}
 
       <Group justify="flex-end">
         <Button onClick={onClose} color="blue">

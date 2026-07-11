@@ -42,28 +42,28 @@ export function Sidebar({ onClose }: SidebarProps) {
 
   const inspectionLinks = [
     { icon: LayoutDashboard, label: 'Dashboard', to: '/dashboard' },
-    { icon: ClipboardCheck, label: 'Inspection Entry', to: '/inspection' },
-    { icon: Save, label: 'Drafts', to: '/drafts' },
-    { icon: FileText, label: 'Reports', to: '/reports' },
+    { icon: ClipboardCheck, label: 'Quality Control', to: '/inspection' },
+    { icon: Save, label: 'Work in Progress', to: '/drafts' },
+    { icon: FileText, label: 'Analytics & Reports', to: '/reports' },
   ];
 
   const pokaYokeLinks = [
     { icon: LayoutDashboard, label: 'Dashboard', to: '/dashboard' },
-    { icon: ClipboardCheck, label: 'Poka Yoke Entry', to: '/pokayoke/entry' },
-    { icon: Save, label: 'Drafts', to: '/drafts' },
-    { icon: FileText, label: 'Poka Yoke Reports', to: '/pokayoke/reports' },
+    { icon: ClipboardCheck, label: 'Poka-Yoke Operations', to: '/pokayoke/entry' },
+    { icon: Save, label: 'Work in Progress', to: '/drafts' },
+    { icon: FileText, label: 'Poka-Yoke Analytics', to: '/pokayoke/reports' },
   ];
 
   const adminLinks = [];
   if (isAdmin) {
-    adminLinks.push({ icon: Building2, label: 'Customers', to: '/customers' });
+    adminLinks.push({ icon: Building2, label: 'Client Management', to: '/customers' });
   }
   if (isAdmin || isSupervisor) {
-    adminLinks.push({ icon: Database, label: 'Master Data', to: '/master-data' });
+    adminLinks.push({ icon: Database, label: 'Master Data Management', to: '/master-data' });
   }
   if (isAdmin) {
-    adminLinks.push({ icon: Users, label: 'Users', to: '/users' });
-    adminLinks.push({ icon: Settings, label: 'Settings', to: '/settings' });
+    adminLinks.push({ icon: Users, label: 'Access Control', to: '/users' });
+    adminLinks.push({ icon: Settings, label: 'System Configuration', to: '/settings' });
   }
 
   const links = [
@@ -137,7 +137,7 @@ export function Sidebar({ onClose }: SidebarProps) {
             leftSection={<link.icon size={18} strokeWidth={2} />}
             active={location.pathname === link.to}
             variant="filled"
-            color="blue"
+            color="indigo"
             className="rounded-md"
           />
         </RouterLink>

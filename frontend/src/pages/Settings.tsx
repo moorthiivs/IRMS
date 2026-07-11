@@ -299,7 +299,7 @@ export function Settings() {
             Controls whether the Lot Number field is mandatory when submitting an inspection.
           </Text>
 
-          <Paper withBorder p="md" radius="md">
+          <Paper withBorder={false} p="md" radius="md">
             <Group justify="space-between" align="flex-start">
               <div style={{ flex: 1 }}>
                 <Group gap="xs" mb={4}>
@@ -347,7 +347,7 @@ export function Settings() {
             have associated inspection history (transactions).
           </Text>
 
-          <Paper withBorder p="md" radius="md">
+          <Paper withBorder={false} p="md" radius="md">
             <Group justify="space-between" align="flex-start">
               <div style={{ flex: 1 }}>
                 <Group gap="xs" mb={4}>

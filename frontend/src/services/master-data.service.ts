@@ -24,8 +24,8 @@ export const masterDataService = {
     return data;
   },
 
-  updateCustomerActiveMachines: async (id: string, activeMachines: string[]): Promise<Customer> => {
-    const { data } = await api.put(`/master-data/customers/${id}/active-machines`, { activeMachines });
+  updateCustomerActiveMachines: async (id: string, activeMachines: string[], activeMachinesDate?: string): Promise<Customer> => {
+    const { data } = await api.put(`/master-data/customers/${id}/active-machines`, { activeMachines, activeMachinesDate });
     return data;
   },
 

@@ -14,12 +14,33 @@ export class MasterDataService {
     if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR' || user.role === 'INSPECTOR') && user.customerId) {
       where.id = user.customerId;
     }
-    return this.prisma.customer.findMany({
+    const customers = await this.prisma.customer.findMany({
       where,
       orderBy: { name: 'asc' },
       include: {
         _count: { select: { parts: true } },
       },
+    });
+
+    const now = new Date();
+    return customers.map(c => {
+      let activeMachines = c.activeMachines;
+      if (c.activeMachinesDate) {
+         const d = new Date(c.activeMachinesDate);
+         // Calculate next 9 AM after 'd'
+         let resetTime = new Date(d);
+         resetTime.setHours(9, 0, 0, 0);
+         if (d.getHours() >= 9) {
+            resetTime.setDate(resetTime.getDate() + 1);
+         }
+         
+         if (now > resetTime) {
+            activeMachines = []; // Expired
+         }
+      } else {
+         activeMachines = []; // If no date is set, default to empty
+      }
+      return { ...c, activeMachines };
     });
   }
 
@@ -40,10 +61,16 @@ export class MasterDataService {
     });
   }
 
-  async updateCustomerActiveMachines(id: string, activeMachines: string[]) {
+  async updateCustomerActiveMachines(id: string, activeMachines: string[], activeMachinesDate?: string) {
+    const data: any = { activeMachines };
+    if (activeMachinesDate) {
+      data.activeMachinesDate = new Date(activeMachinesDate);
+    } else {
+      data.activeMachinesDate = new Date(); // default to now
+    }
     return this.prisma.customer.update({
       where: { id },
-      data: { activeMachines },
+      data,
     });
   }
 

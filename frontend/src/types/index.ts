@@ -23,6 +23,7 @@ export interface Customer {
   code: string | null;
   machines?: string[];
   activeMachines?: string[];
+  activeMachinesDate?: string;
   createdAt?: string;
   updatedAt?: string;
   _count?: { parts: number };

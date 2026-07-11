@@ -43,8 +43,13 @@ export class InspectionsController {
   }
 
   @Get('dashboard')
-  async getDashboard(@Request() req) {
-    return this.inspectionsService.getDashboardData(req.user);
+  async getDashboard(
+    @Request() req,
+    @Query('customerId') customerId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.inspectionsService.getDashboardData(req.user, customerId, startDate, endDate);
   }
 
   @Get('recent')

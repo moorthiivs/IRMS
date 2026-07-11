@@ -5,7 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { ClipboardCheck, CheckCircle2, XCircle, Clock, Play, FileCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import Chart from 'react-apexcharts';
+import ReactECharts from 'echarts-for-react';
+import * as echarts from 'echarts';
 import { inspectionService } from '../services/inspection.service';
 import { masterDataService } from '../services/master-data.service';
 import { useAuthStore } from '../store/auth-store';
@@ -25,16 +26,16 @@ export function MetricCard({ title, value, icon: Icon, isNegative, onClick, colo
   };
 
   const cardBgColors: any = {
-    blue: 'bg-blue-50/60 dark:bg-blue-900/10 border-blue-100 dark:border-blue-800/50',
-    teal: 'bg-teal-50/60 dark:bg-teal-900/10 border-teal-100 dark:border-teal-800/50',
-    red: 'bg-red-50/60 dark:bg-red-900/10 border-red-100 dark:border-red-800/50',
-    orange: 'bg-orange-50/60 dark:bg-orange-900/10 border-orange-100 dark:border-orange-800/50',
-    violet: 'bg-violet-50/60 dark:bg-violet-900/10 border-violet-100 dark:border-violet-800/50',
-    green: 'bg-emerald-50/60 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800/50',
-    indigo: 'bg-indigo-50/60 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-800/50',
-    cyan: 'bg-cyan-50/60 dark:bg-cyan-900/10 border-cyan-100 dark:border-cyan-800/50',
-    pink: 'bg-pink-50/60 dark:bg-pink-900/10 border-pink-100 dark:border-pink-800/50',
-    yellow: 'bg-amber-50/60 dark:bg-amber-900/10 border-amber-100 dark:border-amber-800/50',
+    blue: 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-800/80',
+    teal: 'bg-teal-50 dark:bg-teal-900/20 border-teal-300 dark:border-teal-800/80',
+    red: 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-800/80',
+    orange: 'bg-orange-50 dark:bg-orange-900/20 border-orange-300 dark:border-orange-800/80',
+    violet: 'bg-violet-50 dark:bg-violet-900/20 border-violet-300 dark:border-violet-800/80',
+    green: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-800/80',
+    indigo: 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-300 dark:border-indigo-800/80',
+    cyan: 'bg-cyan-50 dark:bg-cyan-900/20 border-cyan-300 dark:border-cyan-800/80',
+    pink: 'bg-pink-50 dark:bg-pink-900/20 border-pink-300 dark:border-pink-800/80',
+    yellow: 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-800/80',
   };
 
   return (
@@ -92,6 +93,8 @@ export function Dashboard() {
 
   // Dashboard Options
   const [showMachineStats, setShowMachineStats] = useState(true);
+  const [dashboardDateRange, setDashboardDateRange] = useState<[Date | null, Date | null]>([null, null]);
+  const [dashboardCustomer, setDashboardCustomer] = useState<string | null>(null);
 
   const { data: customers = [] } = useQuery({
     queryKey: ['customers'],
@@ -122,8 +125,18 @@ export function Dashboard() {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['dashboard-stats'],
-    queryFn: inspectionService.getDashboardData,
+    queryKey: ['dashboard-stats', dashboardCustomer, dashboardDateRange],
+    queryFn: () => {
+      const filters: any = {};
+      if (dashboardCustomer) filters.customerId = dashboardCustomer;
+      if (dashboardDateRange[0]) {
+        filters.startDate = `${dashboardDateRange[0].getFullYear()}-${String(dashboardDateRange[0].getMonth() + 1).padStart(2, '0')}-${String(dashboardDateRange[0].getDate()).padStart(2, '0')}`;
+      }
+      if (dashboardDateRange[1]) {
+        filters.endDate = `${dashboardDateRange[1].getFullYear()}-${String(dashboardDateRange[1].getMonth() + 1).padStart(2, '0')}-${String(dashboardDateRange[1].getDate()).padStart(2, '0')}`;
+      }
+      return inspectionService.getDashboardData(filters);
+    },
     enabled: user?.role === 'ADMIN',
   });
 
@@ -255,12 +268,14 @@ export function Dashboard() {
     );
   }
 
+  const dateLabel = dashboardDateRange[0] || dashboardDateRange[1] ? 'Selected Period' : 'Today';
+
   const stats = [
-    { title: 'Total Inspections', value: data?.total || 0, icon: ClipboardCheck, color: 'blue', to: '/reports' },
-    { title: 'Passed Lots', value: data?.passed || 0, icon: CheckCircle2, color: 'teal', to: '/reports?status=PASSED' },
-    { title: 'Rejected Lots', value: data?.rejected || 0, icon: XCircle, color: 'red', to: '/reports?status=REJECTED' },
-    { title: 'Pending Today', value: data?.pending || 0, icon: Clock, color: 'orange', to: null },
-    { title: 'Approval Pending', value: data?.approvalPending || 0, icon: FileCheck, color: 'violet', to: '/reports?approval=pending' },
+    { title: 'Total Inspections', value: isLoading ? <Skeleton height={24} width={40} /> : data?.total || 0, icon: ClipboardCheck, color: 'blue', to: '/reports' },
+    { title: 'Passed Lots', value: isLoading ? <Skeleton height={24} width={40} /> : data?.passed || 0, icon: CheckCircle2, color: 'teal', to: '/reports?status=PASSED' },
+    { title: 'Rejected Lots', value: isLoading ? <Skeleton height={24} width={40} /> : data?.rejected || 0, icon: XCircle, color: 'red', to: '/reports?status=REJECTED' },
+    { title: `Pending ${dateLabel}`, value: isLoading ? <Skeleton height={24} width={40} /> : data?.pending || 0, icon: Clock, color: 'orange', to: null },
+    { title: 'Approval Pending', value: isLoading ? <Skeleton height={24} width={40} /> : data?.approvalPending || 0, icon: FileCheck, color: 'violet', to: '/reports?approval=pending' },
   ];
 
   // Build trend chart options
@@ -272,129 +287,85 @@ export function Dashboard() {
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     });
 
-    // Filter by selected parameter or show all
     const paramsToShow = trendParam
       ? trendData.parameters.filter((p: any) => p.parameterId === trendParam)
       : trendData.parameters;
 
+    const colors = ['#008FFB', '#00E396', '#FEB019', '#FF4560', '#775DD0', '#e64980'];
     const series: any[] = [];
-    const annotations: any = { position: 'back', yaxis: [] };
 
     paramsToShow.forEach((param: any, idx: number) => {
-      const label = param.parameterName;
-      series.push({
-        name: label,
-        data: param.daily.map((d: any) => d.avg),
-        type: 'area',
-      });
+      const color = colors[idx % colors.length];
+      const seriesObj: any = {
+        name: param.parameterName,
+        type: 'line',
+        data: param.daily.map((d: any) => d.avg !== null ? Number(d.avg.toFixed(3)) : null),
+        yAxisIndex: idx === 1 && paramsToShow.length === 2 ? 1 : 0,
+        itemStyle: { color },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: color },
+            { offset: 1, color: 'rgba(255,255,255,0)' }
+          ]),
+          opacity: 0.3
+        },
+        symbol: 'circle',
+        symbolSize: 6,
+        label: { show: !trendParam, position: 'top', formatter: '{c}', fontSize: 10 },
+        markLine: { data: [], symbol: ['none', 'none'], label: { position: 'end' } },
+        markArea: { data: [], itemStyle: { opacity: 0.2 } },
+      };
 
-      // Add control limit bands ONLY if a single parameter is selected
-      if (trendParam) {
-        if (param.controlLimitMax !== null && param.controlLimitMin !== null) {
-          const MAX = param.controlLimitMax;
-          const MIN = param.controlLimitMin;
-          const MEAN = (MAX + MIN) / 2;
-          const TOLER = MAX - MIN;
-          const TOLER_70 = TOLER * 0.70;
-          const UCL = MEAN + (TOLER_70 / 2);
-          const LCL = MEAN - (TOLER_70 / 2);
+      if (trendParam && param.controlLimitMax !== null && param.controlLimitMin !== null) {
+        const MAX = param.controlLimitMax;
+        const MIN = param.controlLimitMin;
+        const MEAN = (MAX + MIN) / 2;
+        const TOLER = MAX - MIN;
+        const TOLER_70 = TOLER * 0.70;
+        const UCL = MEAN + (TOLER_70 / 2);
+        const LCL = MEAN - (TOLER_70 / 2);
 
-          const bandOpacity = 0.2;
-          const redColor = '#ef4444';
-          const yellowColor = '#eab308';
-          const greenColor = '#22c55e';
+        // Mark areas
+        seriesObj.markArea.data.push(
+          [{ yAxis: MAX, itemStyle: { color: '#ef4444' } }, { yAxis: MAX + (TOLER * 1.5) }],
+          [{ yAxis: UCL, itemStyle: { color: '#eab308' } }, { yAxis: MAX }],
+          [{ yAxis: LCL, itemStyle: { color: '#22c55e' } }, { yAxis: UCL }],
+          [{ yAxis: MIN, itemStyle: { color: '#eab308' } }, { yAxis: LCL }],
+          [{ yAxis: MIN - (TOLER * 1.5), itemStyle: { color: '#ef4444' } }, { yAxis: MIN }]
+        );
 
-          // Bands without labels
-          annotations.yaxis.push({ y: MAX, y2: MAX + (TOLER * 1.5), yAxisIndex: idx, fillColor: redColor, opacity: bandOpacity });
-          annotations.yaxis.push({ y: UCL, y2: MAX, yAxisIndex: idx, fillColor: yellowColor, opacity: bandOpacity });
-          annotations.yaxis.push({ y: LCL, y2: UCL, yAxisIndex: idx, fillColor: greenColor, opacity: bandOpacity });
-          annotations.yaxis.push({ y: MIN, y2: LCL, yAxisIndex: idx, fillColor: yellowColor, opacity: bandOpacity });
-          annotations.yaxis.push({ y: MIN - (TOLER * 1.5), y2: MIN, yAxisIndex: idx, fillColor: redColor, opacity: bandOpacity });
-
-          // Boundary lines with labels placed exactly at their values
-          const labelStyle = (bg: string) => ({ color: '#fff', background: bg, padding: { left: 4, right: 4, top: 1, bottom: 1 }, fontSize: '10px' });
-
-          annotations.yaxis.push({ y: MAX, yAxisIndex: idx, borderColor: redColor, strokeDashArray: 2, label: { text: 'Max', style: labelStyle(redColor), position: 'left' } });
-          annotations.yaxis.push({ y: UCL, yAxisIndex: idx, borderColor: yellowColor, strokeDashArray: 2, label: { text: 'UCL', style: labelStyle(yellowColor), position: 'left' } });
-          annotations.yaxis.push({ y: MEAN, yAxisIndex: idx, borderColor: greenColor, strokeDashArray: 4, label: { text: 'Mean', style: labelStyle(greenColor), position: 'left', offsetY: 0 } });
-          annotations.yaxis.push({ y: LCL, yAxisIndex: idx, borderColor: yellowColor, strokeDashArray: 2, label: { text: 'LCL', style: labelStyle(yellowColor), position: 'left' } });
-          annotations.yaxis.push({ y: MIN, yAxisIndex: idx, borderColor: redColor, strokeDashArray: 2, label: { text: 'Min', style: labelStyle(redColor), position: 'left' } });
-        } else {
-          // Fallback if only one limit is provided
-          if (param.controlLimitMax !== null) {
-            annotations.yaxis.push({
-              y: param.controlLimitMax,
-              yAxisIndex: idx,
-              borderColor: '#ef4444',
-              strokeDashArray: 4,
-              label: { text: `Max: ${param.controlLimitMax}`, style: { color: '#fff', background: '#ef4444' }, position: 'left' },
-            });
-          }
-          if (param.controlLimitMin !== null) {
-            annotations.yaxis.push({
-              y: param.controlLimitMin,
-              yAxisIndex: idx,
-              borderColor: '#ef4444',
-              strokeDashArray: 4,
-              label: { text: `Min: ${param.controlLimitMin}`, style: { color: '#fff', background: '#ef4444' }, position: 'left' },
-            });
-          }
-        }
+        // Mark lines
+        seriesObj.markLine.data.push(
+          { yAxis: MAX, lineStyle: { color: '#ef4444', type: 'dashed' }, label: { formatter: 'Max', color: '#fff', backgroundColor: '#ef4444', padding: [2, 4] } },
+          { yAxis: UCL, lineStyle: { color: '#eab308', type: 'dashed' }, label: { formatter: 'UCL', color: '#fff', backgroundColor: '#eab308', padding: [2, 4] } },
+          { yAxis: MEAN, lineStyle: { color: '#22c55e', type: 'dotted' }, label: { formatter: 'Mean', color: '#fff', backgroundColor: '#22c55e', padding: [2, 4] } },
+          { yAxis: LCL, lineStyle: { color: '#eab308', type: 'dashed' }, label: { formatter: 'LCL', color: '#fff', backgroundColor: '#eab308', padding: [2, 4] } },
+          { yAxis: MIN, lineStyle: { color: '#ef4444', type: 'dashed' }, label: { formatter: 'Min', color: '#fff', backgroundColor: '#ef4444', padding: [2, 4] } }
+        );
+      } else if (trendParam && param.controlLimitMax !== null) {
+        seriesObj.markLine.data.push({ yAxis: param.controlLimitMax, lineStyle: { color: '#ef4444', type: 'dotted' }, label: { formatter: `Max: ${param.controlLimitMax}` } });
+      } else if (trendParam && param.controlLimitMin !== null) {
+        seriesObj.markLine.data.push({ yAxis: param.controlLimitMin, lineStyle: { color: '#ef4444', type: 'dotted' }, label: { formatter: `Min: ${param.controlLimitMin}` } });
       }
+
+      series.push(seriesObj);
     });
 
     const options: any = {
-      chart: {
-        id: 'trend-chart',
-        toolbar: { show: true },
-        zoom: { enabled: true },
-      },
-      stroke: { width: 3, curve: 'straight' },
-      fill: {
-        type: 'gradient',
-        gradient: {
-          shadeIntensity: 1,
-          opacityFrom: 0.4,
-          opacityTo: 0.05,
-          stops: [0, 100]
-        }
-      },
-      dataLabels: {
-        enabled: !trendParam,
-        formatter: (val: number) => val !== null ? val.toFixed(2) : '',
-        style: { fontSize: '10px' },
-        background: { enabled: true, foreColor: '#000', padding: 2, borderRadius: 2, borderWidth: 0, opacity: 0.7 }
-      },
-      markers: { size: 5, hover: { size: 7 } },
-      xaxis: {
-        categories: dateLabels,
-        axisBorder: { show: false },
-        axisTicks: { show: false },
-      },
-      yaxis: paramsToShow.map((param: any, idx: number) => ({
-        show: idx === 0 || (idx === 1 && paramsToShow.length === 2),
-        opposite: idx === 1,
-        seriesName: param.parameterName,
-        title: { text: idx === 0 ? 'Observed Value' : (idx === 1 && paramsToShow.length === 2 ? 'Observed Value (Right)' : '') },
-        labels: { formatter: (val: number) => val !== null && val !== undefined ? val.toFixed(3) : '' },
-        axisBorder: { show: idx < 2 },
-        axisTicks: { show: idx < 2 },
-      })),
-      annotations,
-      legend: { position: 'top', horizontalAlign: 'left' },
+      grid: { top: 45, right: 60, bottom: 40, left: 60 },
       tooltip: {
-        shared: true,
-        intersect: false,
-        custom: function ({ dataPointIndex, w }: any) {
-          const dateLabel = dateLabels[dataPointIndex];
+        trigger: 'axis',
+        axisPointer: { type: 'cross' },
+        formatter: function (params: any) {
+          const dataIndex = params[0].dataIndex;
+          const dateLabel = dateLabels[dataIndex];
           let html = `<div class="px-3 py-2 shadow-lg bg-white dark:bg-[#25262b] border border-gray-200 dark:border-gray-700 rounded-md text-gray-800 dark:text-gray-200" style="min-width: 250px;">`;
           html += `<div class="text-xs font-bold text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 pb-1 mb-2">${dateLabel}</div>`;
 
           paramsToShow.forEach((param: any, idx: number) => {
-            const dailyData = param.daily[dataPointIndex];
+            const dailyData = param.daily[dataIndex];
+            const color = colors[idx % colors.length];
             if (dailyData && dailyData.readings && dailyData.readings.length > 0) {
-              const color = w.globals.colors[idx % w.globals.colors.length];
-
               let readingsHtml = '';
               dailyData.readings.forEach((r: any) => {
                 let devText = '';
@@ -416,7 +387,6 @@ export function Dashboard() {
                   </div>
                 `;
               });
-
               html += `
                 <div class="mb-3 last:mb-0">
                   <div class="text-sm font-semibold flex items-center gap-1 border-b border-gray-200 dark:border-gray-700 pb-0.5 mb-1">
@@ -426,22 +396,17 @@ export function Dashboard() {
                   <div class="text-[10px] text-gray-500 dark:text-gray-400 mb-2">
                     Spec: <strong>${param.specText || '-'}</strong> ${param.methodOfChecking ? `| Method: <strong>${param.methodOfChecking}</strong>` : ''}
                   </div>
-                  <div class="pl-1">
-                    ${readingsHtml}
-                  </div>
+                  <div class="pl-1">${readingsHtml}</div>
                 </div>
               `;
             } else {
-              const color = w.globals.colors[idx % w.globals.colors.length];
               html += `
                 <div class="mb-3 last:mb-0">
                   <div class="text-sm font-semibold flex items-center gap-1 border-b pb-0.5 mb-1">
                     <span class="w-2 h-2 rounded-full inline-block" style="background-color: ${color}"></span>
                     ${param.parameterName}
                   </div>
-                  <div class="text-xs text-gray-500 italic pl-3">
-                    No readings for this date.
-                  </div>
+                  <div class="text-xs text-gray-500 italic pl-3">No readings for this date.</div>
                 </div>
               `;
             }
@@ -450,11 +415,21 @@ export function Dashboard() {
           return html;
         }
       },
-      grid: { borderColor: '#f1f3f5', strokeDashArray: 4 },
-      colors: ['#008FFB', '#00E396', '#FEB019', '#FF4560', '#775DD0', '#e64980'],
+      legend: { data: paramsToShow.map((p: any) => p.parameterName), top: 0, right: 20 },
+      xAxis: { type: 'category', data: dateLabels, boundaryGap: false, splitLine: { show: true, lineStyle: { type: 'dashed', color: '#f1f3f5' } } },
+      yAxis: paramsToShow.map((_: any, idx: number) => ({
+        type: 'value',
+        name: idx === 0 ? 'Observed Value' : (idx === 1 && paramsToShow.length === 2 ? 'Observed Value (Right)' : ''),
+        show: idx === 0 || (idx === 1 && paramsToShow.length === 2),
+        nameTextStyle: { padding: [0, 0, 0, 10] },
+        splitLine: { show: idx === 0, lineStyle: { type: 'dashed', color: '#f1f3f5' } },
+        scale: true,
+      })),
+      series,
+      color: colors,
     };
 
-    return { series, options };
+    return options;
   };
 
   const trendChart = buildTrendChart();
@@ -463,30 +438,23 @@ export function Dashboard() {
     if (!data?.customerSummary) return null;
     const items: any[] = Object.values(data.customerSummary);
     if (items.length === 0) return null;
-    const total = items.reduce((sum, item) => sum + item.total, 0);
-    const colors = ['#facc15', '#3b82f6', '#22c55e', '#a855f7', '#f43f5e', '#06b6d4', '#6366f1', '#eab308'];
+    const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc']
     return {
-      series: items.map(c => c.total),
       options: {
-        chart: { type: 'donut' as const, parentHeightOffset: 0 },
-        labels: items.map(c => c.name),
-        legend: { show: false },
-        dataLabels: {
-          enabled: true,
-          formatter: (val: number) => val.toFixed(0) + '%',
-          dropShadow: { enabled: false },
-          style: { fontSize: '11px', fontWeight: 600 }
-        },
-        plotOptions: { pie: { donut: { size: '65%' } } },
-        stroke: { show: true, width: 1, colors: [paperBgColor] },
-        colors,
-        tooltip: { theme: 'light' as const }
-      },
-      legendData: items.map((c, i) => ({
-        label: c.name,
-        percentage: total > 0 ? ((c.total / total) * 100).toFixed(0) + '%' : '0%',
-        color: colors[i % colors.length]
-      }))
+        tooltip: { trigger: 'item', position: 'inside' },
+        series: [{
+          type: 'pie',
+          radius: ['40%', '75%'],
+          center: ['50%', '45%'],
+          avoidLabelOverlap: false,
+          padAngle: 5,
+          itemStyle: { borderColor: paperBgColor, borderWidth: 2 },
+          label: { show: true, position: 'inside', formatter: '{d}%', fontSize: 11, fontWeight: 600, color: '#fff' },
+          labelLine: { show: false },
+          data: items.map((c, i) => ({ value: c.total, name: c.name, itemStyle: { color: colors[i % colors.length] } }))
+        }],
+        legend: { show: true, bottom: 0, left: 'center', type: 'scroll' }
+      }
     };
   })();
 
@@ -494,30 +462,23 @@ export function Dashboard() {
     if (!data?.partSummary) return null;
     const items: any[] = Object.values(data.partSummary);
     if (items.length === 0) return null;
-    const total = items.reduce((sum, item) => sum + item.total, 0);
-    const colors = ['#3b82f6', '#f43f5e', '#a855f7', '#22c55e', '#eab308', '#06b6d4', '#6366f1', '#facc15'];
+    const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc']
     return {
-      series: items.map(p => p.total),
       options: {
-        chart: { type: 'donut' as const, parentHeightOffset: 0 },
-        labels: items.map(p => p.partNumber),
-        legend: { show: false },
-        dataLabels: {
-          enabled: true,
-          formatter: (val: number) => val.toFixed(0) + '%',
-          dropShadow: { enabled: false },
-          style: { fontSize: '11px', fontWeight: 600 }
-        },
-        plotOptions: { pie: { donut: { size: '65%' } } },
-        stroke: { show: true, width: 1, colors: [paperBgColor] },
-        colors,
-        tooltip: { theme: 'light' as const }
-      },
-      legendData: items.map((p, i) => ({
-        label: p.partNumber,
-        percentage: total > 0 ? ((p.total / total) * 100).toFixed(0) + '%' : '0%',
-        color: colors[i % colors.length]
-      }))
+        tooltip: { trigger: 'item' },
+        series: [{
+          type: 'pie',
+          radius: ['40%', '75%'],
+          center: ['50%', '45%'],
+          padAngle: 5,
+          avoidLabelOverlap: false,
+          itemStyle: { borderColor: paperBgColor, borderWidth: 2 },
+          label: { show: true, position: 'inside', formatter: '{d}%', fontSize: 11, fontWeight: 600, color: '#fff' },
+          labelLine: { show: false },
+          data: items.map((p, i) => ({ value: p.total, name: p.partNumber, itemStyle: { color: colors[i % colors.length] } }))
+        }],
+        legend: { show: true, bottom: 0, left: 'center', type: 'scroll' }
+      }
     };
   })();
 
@@ -527,50 +488,63 @@ export function Dashboard() {
     const pending = (data.pending || 0) + (data.approvalPending || 0);
     const total = completed + pending;
     if (total === 0) return null;
-    
+    const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc']
     const items = [
       { name: 'Completed', value: completed },
       { name: 'Pending', value: pending }
     ];
-    const colors = ['#22c55e', '#facc15'];
-
     return {
-      series: items.map(i => i.value),
       options: {
-        chart: { type: 'donut' as const, parentHeightOffset: 0 },
-        labels: items.map(i => i.name),
-        legend: { show: false },
-        dataLabels: {
-          enabled: true,
-          formatter: (val: number) => val.toFixed(0) + '%',
-          dropShadow: { enabled: false },
-          style: { fontSize: '11px', fontWeight: 600 }
-        },
-        plotOptions: { pie: { donut: { size: '65%' } } },
-        stroke: { show: true, width: 1, colors: [paperBgColor] },
-        colors,
-        tooltip: { theme: 'light' as const }
-      },
-      legendData: items.map((item, i) => ({
-        label: item.name,
-        percentage: total > 0 ? ((item.value / total) * 100).toFixed(0) + '%' : '0%',
-        color: colors[i % colors.length]
-      }))
+        tooltip: { trigger: 'item' },
+        series: [{
+          type: 'pie',
+          radius: ['40%', '75%'],
+          center: ['50%', '45%'],
+          padAngle: 5,
+          avoidLabelOverlap: false,
+          itemStyle: { borderColor: paperBgColor, borderWidth: 2 },
+          label: { show: true, position: 'inside', formatter: '{d}%', fontSize: 11, fontWeight: 600, color: '#fff' },
+          labelLine: { show: false },
+          data: items.map((item, i) => ({ value: item.value, name: item.name, itemStyle: { color: colors[i % colors.length] } }))
+        }],
+        legend: { show: true, bottom: 0, left: 'center', type: 'scroll' }
+      }
     };
   })();
 
 
   return (
     <div className="bg-[#f4f7fe] dark:bg-[var(--mantine-color-dark-8)] min-h-[calc(100vh-100px)] rounded-xl border border-transparent dark:border-dark-700 p-4 lg:p-6 transition-colors">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <Title order={3} size="h4" className="text-gray-900 dark:text-gray-100 tracking-tight font-display">Dashboard</Title>
           <Text size="sm" c="dimmed" mt={2}>Welcome back, {user?.name || 'Administrator'}</Text>
         </div>
+
         {user?.role === 'ADMIN' && (
-          <Button variant="light" size="sm" onClick={() => setShowMachineStats(!showMachineStats)}>
-            {showMachineStats ? 'Hide M/C Stats' : 'Show M/C Stats'}
-          </Button>
+          <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-[#1a1b1e] p-2 rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
+            <Select
+              placeholder="All Customers"
+              data={customers.map((c: any) => ({ value: c.id, label: c.name }))}
+              value={dashboardCustomer}
+              onChange={setDashboardCustomer}
+              clearable
+              size="xs"
+              className="w-[150px]"
+            />
+            <DatePickerInput
+              type="range"
+              placeholder="Select Date Range"
+              value={dashboardDateRange}
+              onChange={setDashboardDateRange}
+              clearable
+              size="xs"
+              className="w-[200px]"
+            />
+            <Button variant="light" size="xs" onClick={() => setShowMachineStats(!showMachineStats)}>
+              {showMachineStats ? 'Hide M/C Stats' : 'Show M/C Stats'}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -590,7 +564,7 @@ export function Dashboard() {
             <Text size="xs" fw={700} c="dimmed" tt="uppercase" className="tracking-widest">Machine Statistics</Text>
             <Divider className="flex-grow" variant="dashed" />
           </div>
-          
+
           <SimpleGrid cols={{ base: 2, sm: 3, md: 5, lg: 5 }} spacing="xs" className="mb-4">
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0 * 0.05 }}>
               <MetricCard
@@ -601,9 +575,9 @@ export function Dashboard() {
             </motion.div>
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 1 * 0.05 }}>
               <MetricCard
-                title="Active M/C Today"
+                title={`Active M/C ${dateLabel}`}
                 value={isLoading ? <Skeleton height={24} width={40} /> : data?.machineSummary?.activeMcCount || 0}
-                onClick={() => navigate('/reports?hasMc=true&date=today')}
+                onClick={() => navigate('/reports?hasMc=true')}
                 color="cyan"
               />
             </motion.div>
@@ -642,27 +616,16 @@ export function Dashboard() {
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, delay: 0.2 }}>
           <Paper withBorder p="md" radius="lg" style={{ height: '100%' }} className="shadow-sm">
             <div className="flex justify-between items-center mb-4">
-              <Text size="sm" fw={700}>Customer Share (Today)</Text>
-              <Select size="xs" defaultValue="today" data={[{ value: 'today', label: 'Today' }]} variant="unstyled" className="w-[80px]" />
+              <Text size="sm" fw={700}>Customer Share ({dateLabel})</Text>
             </div>
             {isLoading ? (
               <Skeleton height={180} />
             ) : customerDonut ? (
               <div className="flex flex-col justify-between">
-                <div className="w-full h-[180px] mb-6">
-                  <Chart options={customerDonut.options} series={customerDonut.series} type="donut" height="100%" width="100%" />
+                <div className="w-full h-[230px] mb-6">
+                  <ReactECharts option={customerDonut.options} style={{ height: '100%', width: '100%' }} />
                 </div>
-                <div className="flex flex-col gap-3 px-2">
-                  {customerDonut.legendData.map((leg: any, idx: number) => (
-                    <div key={idx} className="flex justify-between items-center text-sm">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: leg.color }}></div>
-                        <Text c="dimmed" fw={500}>{leg.label}</Text>
-                      </div>
-                      <Text fw={700} className="text-gray-700 dark:text-gray-200">{leg.percentage}</Text>
-                    </div>
-                  ))}
-                </div>
+
               </div>
             ) : (
               <Text c="dimmed" size="sm" className="text-center mt-12">No data today</Text>
@@ -673,26 +636,14 @@ export function Dashboard() {
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, delay: 0.3 }}>
           <Paper withBorder p="md" radius="lg" style={{ height: '100%' }} className="shadow-sm">
             <div className="flex justify-between items-center mb-4">
-              <Text size="sm" fw={700}>Part Share (Today)</Text>
-              <Select size="xs" defaultValue="today" data={[{ value: 'today', label: 'Today' }]} variant="unstyled" className="w-[80px]" />
+              <Text size="sm" fw={700}>Part Share ({dateLabel})</Text>
             </div>
             {isLoading ? (
               <Skeleton height={180} />
             ) : partDonut ? (
               <div className="flex flex-col justify-between">
-                <div className="w-full h-[180px] mb-6">
-                  <Chart options={partDonut.options} series={partDonut.series} type="donut" height="100%" width="100%" />
-                </div>
-                <div className="flex flex-col gap-3 px-2">
-                  {partDonut.legendData.map((leg: any, idx: number) => (
-                    <div key={idx} className="flex justify-between items-center text-sm">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: leg.color }}></div>
-                        <Text c="dimmed" fw={500}>{leg.label}</Text>
-                      </div>
-                      <Text fw={700} className="text-gray-700 dark:text-gray-200">{leg.percentage}</Text>
-                    </div>
-                  ))}
+                <div className="w-full h-[230px] mb-6">
+                  <ReactECharts option={partDonut.options} style={{ height: '100%', width: '100%' }} />
                 </div>
               </div>
             ) : (
@@ -701,29 +652,17 @@ export function Dashboard() {
           </Paper>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, delay: 0.35 }}>
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, delay: 0.5 }}>
           <Paper withBorder p="md" radius="lg" style={{ height: '100%' }} className="shadow-sm">
             <div className="flex justify-between items-center mb-4">
-              <Text size="sm" fw={700}>Status (Today)</Text>
-              <Select size="xs" defaultValue="today" data={[{ value: 'today', label: 'Today' }]} variant="unstyled" className="w-[80px]" />
+              <Text size="sm" fw={700}>Recent Activity (7 Days up to {dateLabel})</Text>
             </div>
             {isLoading ? (
               <Skeleton height={180} />
             ) : statusDonut ? (
               <div className="flex flex-col justify-between">
-                <div className="w-full h-[180px] mb-6">
-                  <Chart options={statusDonut.options} series={statusDonut.series} type="donut" height="100%" width="100%" />
-                </div>
-                <div className="flex flex-col gap-3 px-2">
-                  {statusDonut.legendData.map((leg: any, idx: number) => (
-                    <div key={idx} className="flex justify-between items-center text-sm">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: leg.color }}></div>
-                        <Text c="dimmed" fw={500}>{leg.label}</Text>
-                      </div>
-                      <Text fw={700} className="text-gray-700 dark:text-gray-200">{leg.percentage}</Text>
-                    </div>
-                  ))}
+                <div className="w-full h-[230px] mb-6">
+                  <ReactECharts option={statusDonut.options} style={{ height: '100%', width: '100%' }} />
                 </div>
               </div>
             ) : (
@@ -740,43 +679,34 @@ export function Dashboard() {
             {isLoading ? (
               <Skeleton height={180} />
             ) : data?.recentActivity ? (
-              <div className="w-full flex-grow">
-                <Chart
-                  options={{
-                    ...data.recentActivity.options,
-                    chart: { 
-                      ...data.recentActivity.options.chart, 
-                      toolbar: { show: false }, 
-                      parentHeightOffset: 0,
-                      dropShadow: { enabled: true, top: 4, left: 2, blur: 4, opacity: 0.25 }
-                    },
-                    fill: {
-                      type: 'gradient',
-                      gradient: {
-                        shade: 'light',
-                        type: 'vertical',
-                        shadeIntensity: 0.3,
-                        inverseColors: false,
-                        opacityFrom: 1,
-                        opacityTo: 0.7,
-                        stops: [0, 100]
+              <div className="w-full flex-grow" style={{ minHeight: 200 }}>
+                <ReactECharts
+                  option={{
+                    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                    legend: { data: ['Passed', 'Rejected'], bottom: 0 },
+                    grid: { top: 10, right: 10, bottom: 30, left: 10, containLabel: true },
+                    xAxis: { type: 'category', data: data.recentActivity.categories, axisLine: { show: false }, axisTick: { show: false } },
+                    yAxis: { type: 'value', show: false },
+                    series: [
+                      {
+                        name: 'Passed', type: 'bar', stack: 'total', barWidth: '45%',
+                        itemStyle: {
+                          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: '#40c057' }, { offset: 1, color: '#2b8a3e' }]),
+                          borderRadius: [4, 4, 0, 0]
+                        },
+                        data: data.recentActivity.passed
+                      },
+                      {
+                        name: 'Rejected', type: 'bar', stack: 'total', barWidth: '45%',
+                        itemStyle: {
+                          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: '#fa5252' }, { offset: 1, color: '#c92a2a' }]),
+                          borderRadius: [4, 4, 0, 0]
+                        },
+                        data: data.recentActivity.rejected
                       }
-                    },
-                    plotOptions: { 
-                      bar: { 
-                        columnWidth: '45%', 
-                        borderRadius: 4,
-                      } 
-                    },
-                    tooltip: { theme: 'light' as const },
-                    grid: { show: false, padding: { top: 0, right: 0, bottom: 0, left: 0 } },
-                    xaxis: { ...data.recentActivity.options.xaxis, labels: { show: false }, axisBorder: { show: false }, axisTicks: { show: false } },
-                    yaxis: { ...data.recentActivity.options.yaxis, labels: { show: false } }
+                    ]
                   }}
-                  series={data.recentActivity.series}
-                  type="bar"
-                  height="100%"
-                  width="100%"
+                  style={{ height: '100%', width: '100%' }}
                 />
               </div>
             ) : (
@@ -887,7 +817,7 @@ export function Dashboard() {
               <Skeleton height={240} />
             ) : trendChart ? (
               <div style={{ width: '100%', height: 260, marginTop: -10 }}>
-                <Chart options={trendChart.options} series={trendChart.series} type="area" height={260} />
+                <ReactECharts option={trendChart} style={{ height: 260, width: '100%' }} />
               </div>
             ) : (
               <div className="text-center py-10">

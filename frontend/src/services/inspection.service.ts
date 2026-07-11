@@ -34,8 +34,13 @@ export const inspectionService = {
     return data;
   },
 
-  getDashboardData: async () => {
-    const { data } = await api.get('/inspections/dashboard');
+  getDashboardData: async (filters?: { customerId?: string | null; startDate?: string | null; endDate?: string | null }) => {
+    const params: any = {};
+    if (filters?.customerId) params.customerId = filters.customerId;
+    if (filters?.startDate) params.startDate = filters.startDate;
+    if (filters?.endDate) params.endDate = filters.endDate;
+    
+    const { data } = await api.get('/inspections/dashboard', { params });
     return data;
   },
 

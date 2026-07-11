@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
-  Title, Paper, Table, Group, Badge, ActionIcon, 
+  Paper, Table, Group, Badge, ActionIcon, 
   Tabs, Select, TextInput, Button, Text, Tooltip,
-  Modal, Checkbox, SimpleGrid, Textarea, Timeline, ThemeIcon, Autocomplete, LoadingOverlay, Stack, Box
+  Modal, Checkbox, SimpleGrid, Textarea, Timeline, ThemeIcon, Autocomplete, LoadingOverlay, Box, Avatar
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -589,19 +589,18 @@ export function Reports() {
   // Find Part details
   const currentPartInfo = parts.find(p => p.id === selectedPart);
 
-  // Feature 2: Group Recent Inspections
+  // Feature 2: Group Recent Inspections (Sleek UI)
   const groupedRecent = useMemo(() => {
     const groups: Record<string, any> = {};
     recent.forEach((tx: any) => {
-      const dateStr = new Date(tx.inspectionTimestamp).toLocaleDateString();
-      const custName = tx.part?.customer?.name || 'Unknown Customer';
+      const custName = (tx.part?.customer?.name || 'Unknown Customer').toUpperCase();
       const partNo = tx.part?.partNumber || 'Unknown Part';
       const opNo = tx.operation?.operationNumber || 'Unknown Op';
       const mcNo = tx.mcNo || 'Unknown M/C';
 
-      const l1 = `${custName} / ${partNo} - ${dateStr}`;
-      const l2 = opNo;
-      const l3 = mcNo;
+      const l1 = `${custName} - ${partNo}`;
+      const l2 = `OP: ${opNo}`;
+      const l3 = `M/C: ${mcNo}`;
 
       if (!groups[l1]) groups[l1] = { txs: [], children: {} };
       groups[l1].txs.push(tx);
@@ -696,154 +695,146 @@ export function Reports() {
         }
       `}</style>
 
-      <Group justify="space-between" mb="lg" className="print:hidden">
-        <Title order={2}>Inspection Reports</Title>
-      </Group>
 
-      <Tabs value={activeTab} onChange={setActiveTab} className="print:hidden">
-        <Tabs.List mb="lg">
-          <Tabs.Tab value="history" leftSection={<FileText size={16} />}>
+
+      <Tabs variant="pills" value={activeTab} onChange={setActiveTab} className="print:hidden">
+        <Tabs.List mb="xl">
+          <Tabs.Tab value="history" leftSection={<FileText size={14} />}>
             Individual Submissions
           </Tabs.Tab>
-          <Tabs.Tab value="daily" leftSection={<LayoutGrid size={16} />}>
+          <Tabs.Tab value="daily" leftSection={<LayoutGrid size={14} />}>
             Daily Audit Check Sheet
           </Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="history">
-          <Paper withBorder p="sm" radius="md" mb="md" className="bg-blue-50 dark:bg-[#25262b]">
-            <Stack gap="md">
-              <Group justify="space-between" align="center">
-                <Text size="sm" fw={600}>Filters:</Text>
-                <Button
-                  size="xs"
-                  variant="subtle"
-                  onClick={() => {
-                    setSearchParams({});
-                    setHistoryDate(null);
-                    setHistoryShift(null);
-                    setHistoryPart(null);
-                    setHistoryOp(null);
-                    setHistoryHasMc(false);
-                  }}
-                >
-                  Clear Filters
+          <Group justify="space-between" align="center" mb="lg">
+            <Group gap="sm">
+              <Text size="sm" fw={600} c="dimmed">All Status ({recent.length})</Text>
+              
+              <DatePickerInput
+                placeholder="Date"
+                size="xs"
+                value={historyDate}
+                onChange={setHistoryDate}
+                clearable
+                styles={{ input: { border: 'none', backgroundColor: '#f1f3f5' } }}
+              />
+              <Select
+                placeholder="Shift"
+                size="xs"
+                data={shifts.map((s: any) => ({ value: s.id, label: s.name }))}
+                value={historyShift}
+                onChange={setHistoryShift}
+                clearable
+                styles={{ input: { border: 'none', backgroundColor: '#f1f3f5' } }}
+              />
+              <Select
+                placeholder="Customer"
+                size="xs"
+                data={customers.map((c: any) => ({ value: c.id, label: c.name }))}
+                value={historyCustomer}
+                onChange={(v) => { setHistoryCustomer(v); setHistoryPart(null); setHistoryOp(null); }}
+                clearable
+                styles={{ input: { border: 'none', backgroundColor: '#f1f3f5' } }}
+              />
+              <Select
+                placeholder="Part"
+                size="xs"
+                data={filteredHistoryParts.map((p: any) => ({ value: p.id, label: p.partNumber }))}
+                value={historyPart}
+                onChange={(v) => { setHistoryPart(v); setHistoryOp(null); }}
+                clearable
+                styles={{ input: { border: 'none', backgroundColor: '#f1f3f5' } }}
+              />
+              <Select
+                placeholder="Operation"
+                size="xs"
+                data={historyOperations.map(o => ({ value: o.id, label: o.operationNumber }))}
+                value={historyOp}
+                onChange={setHistoryOp}
+                clearable
+                disabled={!historyPart}
+                styles={{ input: { border: 'none', backgroundColor: '#f1f3f5' } }}
+              />
+              {(historyDate || historyShift || historyCustomer || historyPart || historyOp) && (
+                <Button size="xs" variant="subtle" color="gray" onClick={() => {
+                  setSearchParams({});
+                  setHistoryDate(null);
+                  setHistoryShift(null);
+                  setHistoryPart(null);
+                  setHistoryOp(null);
+                  setHistoryHasMc(false);
+                }}>
+                  Clear
                 </Button>
-              </Group>
+              )}
+            </Group>
 
-              <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 5 }} spacing="xs">
-                <DatePickerInput
-                  placeholder="Select Date"
-                  size="xs"
-                  value={historyDate}
-                  onChange={setHistoryDate}
-                  clearable
-                  className="w-full"
-                />
-                <Select
-                  placeholder="Select Shift"
-                  size="xs"
-                  data={shifts.map((s: any) => ({ value: s.id, label: s.name }))}
-                  value={historyShift}
-                  onChange={setHistoryShift}
-                  clearable
-                  className="w-full"
-                />
-                <Select
-                  placeholder="Select Customer"
-                  size="xs"
-                  data={customers.map((c: any) => ({ value: c.id, label: c.name }))}
-                  value={historyCustomer}
-                  onChange={(v) => { setHistoryCustomer(v); setHistoryPart(null); setHistoryOp(null); }}
-                  clearable
-                  className="w-full"
-                />
-                <Select
-                  placeholder="Select Part"
-                  size="xs"
-                  data={filteredHistoryParts.map((p: any) => ({ value: p.id, label: p.partNumber }))}
-                  value={historyPart}
-                  onChange={(v) => { setHistoryPart(v); setHistoryOp(null); }}
-                  clearable
-                  className="w-full"
-                />
-                <Select
-                  placeholder="Select Operation"
-                  size="xs"
-                  data={historyOperations.map(o => ({ value: o.id, label: o.operationNumber }))}
-                  value={historyOp}
-                  onChange={setHistoryOp}
-                  clearable
-                  disabled={!historyPart}
-                  className="w-full"
-                />
-              </SimpleGrid>
+            <Group gap="sm">
+              {filterStatus && (
+                <Badge color={filterStatus === 'PASSED' ? 'green' : 'red'} variant="light">
+                  {filterStatus}
+                </Badge>
+              )}
+              {filterApproval === 'pending' && (
+                <Badge color="violet" variant="light">
+                  Approval Pending
+                </Badge>
+              )}
+              {selectedIds.length > 0 && (
+                <Button size="xs" color="red" variant="light" onClick={handleBulkDelete} loading={bulkDeletePending}>
+                  Delete ({selectedIds.length})
+                </Button>
+              )}
+              {canApprove && selectedIds.length > 0 && recent.filter((t: any) => selectedIds.includes(t.id) && t.status === 'PASSED' && !t.approvedById).length > 0 && (
+                <Button size="xs" color="green" variant="light" onClick={() => handleBulkApprove(recent.filter((t: any) => selectedIds.includes(t.id)))}>
+                  Approve ({recent.filter((t: any) => selectedIds.includes(t.id) && t.status === 'PASSED' && !t.approvedById).length})
+                </Button>
+              )}
+            </Group>
+          </Group>
 
-              <Group justify="space-between">
-                <Group gap="xs">
-                  {filterStatus && (
-                    <Badge color={filterStatus === 'PASSED' ? 'green' : 'red'} variant="filled">
-                      {filterStatus}
-                    </Badge>
-                  )}
-                  {filterApproval === 'pending' && (
-                    <Badge color="violet" variant="filled">
-                      Approval Pending
-                    </Badge>
-                  )}
-                </Group>
-
-                {selectedIds.length > 0 && (
-                  <Button size="xs" color="red" variant="filled" onClick={handleBulkDelete} loading={bulkDeletePending}>
-                    Bulk Delete Selected ({selectedIds.length})
-                  </Button>
-                )}
-              </Group>
-            </Stack>
-          </Paper>
-          <Paper withBorder p="md" radius="md">
+          <Box className="w-full">
             {isRecentLoading ? (
               <TableSkeleton rows={8} />
             ) : (
               <div className="overflow-x-auto">
-                  <Table striped highlightOnHover withTableBorder withColumnBorders style={{ minWidth: 900 }}>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th style={{ width: 40 }}>
-                      <Checkbox
-                        checked={recent.length > 0 && selectedIds.length === recent.length}
-                        indeterminate={selectedIds.length > 0 && selectedIds.length < recent.length}
-                        onChange={(e) => handleSelectAll(e.currentTarget.checked, recent.map((t: any) => t.id))}
-                      />
-                    </Table.Th>
-                    <Table.Th>Date & Time</Table.Th>
-                    <Table.Th>Part / Operation</Table.Th>
-                    <Table.Th>Shift</Table.Th>
-                    <Table.Th>Lot No</Table.Th>
-                    <Table.Th>Inspector</Table.Th>
-                    <Table.Th>Status</Table.Th>
-                    <Table.Th style={{ minWidth: 120 }}>Actions</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
+                <Table verticalSpacing="md" striped={false} withRowBorders className="min-w-[900px] border border-gray-200 rounded-md overflow-hidden">
+                  <Table.Thead className="bg-gray-50">
+                    <Table.Tr>
+                      <Table.Th style={{ width: 40, borderBottom: 'none' }}>
+                        <Checkbox
+                          checked={recent.length > 0 && selectedIds.length === recent.length}
+                          indeterminate={selectedIds.length > 0 && selectedIds.length < recent.length}
+                          onChange={(e) => handleSelectAll(e.currentTarget.checked, recent.map((t: any) => t.id))}
+                          color="indigo"
+                        />
+                      </Table.Th>
+                      <Table.Th style={{ borderBottom: 'none' }}><Text size="xs" fw={600} c="dimmed">Report / Details</Text></Table.Th>
+                      <Table.Th style={{ borderBottom: 'none' }}><Text size="xs" fw={600} c="dimmed">Shift & Lot</Text></Table.Th>
+                      <Table.Th style={{ borderBottom: 'none' }}><Text size="xs" fw={600} c="dimmed">Inspector</Text></Table.Th>
+                      <Table.Th style={{ borderBottom: 'none' }}><Text size="xs" fw={600} c="dimmed">Accuracy / Status</Text></Table.Th>
+                      <Table.Th style={{ borderBottom: 'none', width: 140 }}><Text size="xs" fw={600} c="dimmed">Assigned On</Text></Table.Th>
+                      <Table.Th style={{ borderBottom: 'none' }}><Text size="xs" fw={600} c="dimmed">Actions</Text></Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
                     <Table.Tbody>
                       {Object.entries(groupedRecent).map(([l1Key, l1Node]: [string, any]) => (
                         <React.Fragment key={l1Key}>
                           {/* LEVEL 1: Customer / Part */}
-                      <Table.Tr 
-                            className={`cursor-pointer transition-colors ${l1Node.txs.some((tx: any) => tx.status === 'REJECTED') ? 'bg-orange-100 hover:bg-orange-200 text-orange-900' : 'bg-slate-700 hover:bg-slate-800 text-white border-b-2 border-slate-900'}`}
+                          <Table.Tr 
+                            className="cursor-pointer bg-white hover:bg-gray-50 transition-colors"
                             onClick={() => toggleGroup(l1Key)}
-                      >
-                        <Table.Td colSpan={8} className="py-3">
-                          <Group justify="space-between">
-                                <Group gap="md">
-                                  <ActionIcon
-                                    variant="transparent"
-                                    color={l1Node.txs.some((tx: any) => tx.status === 'REJECTED') ? "orange" : "gray.1"}
-                                  >
+                          >
+                            <Table.Td colSpan={7} className="py-3">
+                              <Group justify="space-between">
+                                <Group gap="sm">
+                                  <ActionIcon variant="subtle" color="gray" size="sm">
                                     {expandedGroups[l1Key] ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                                   </ActionIcon>
                                   <Checkbox
-                                    color="blue"
+                                    color="indigo"
                                     checked={l1Node.txs.length > 0 && l1Node.txs.every((t: any) => selectedIds.includes(t.id))}
                                     indeterminate={l1Node.txs.some((t: any) => selectedIds.includes(t.id)) && !l1Node.txs.every((t: any) => selectedIds.includes(t.id))}
                                     onChange={(e) => {
@@ -852,17 +843,14 @@ export function Reports() {
                                     }}
                                     onClick={(e) => e.stopPropagation()}
                                   />
-                                  <Text size="md" fw={700}>
-                                    {l1Key}
-                              </Text>
-                                  <Badge size="sm" variant="white" color="dark" radius="sm">{l1Node.txs.length} item{l1Node.txs.length > 1 ? 's' : ''}</Badge>
-                            </Group>
-                            <Group>
-                                  {l1Node.txs.some((tx: any) => tx.status === 'REJECTED') ? (
-                                    <Badge color="red" variant="filled" size="sm">
-                                  Take Action Required
-                                </Badge>
-                                  ) : null}
+                                  <Avatar color="indigo" radius="xl" size="sm">{l1Key.charAt(0)}</Avatar>
+                                  <Text size="sm" fw={700} className="text-gray-900">{l1Key}</Text>
+                                  <Badge size="sm" variant="light" color="gray" radius="xl">{l1Node.txs.length}</Badge>
+                                </Group>
+                                <Group>
+                                  {l1Node.txs.some((tx: any) => tx.status === 'REJECTED') && (
+                                    <Badge color="red" variant="dot" size="sm" className="border-none bg-transparent">Action Required</Badge>
+                                  )}
                                 </Group>
                               </Group>
                             </Table.Td>
@@ -874,18 +862,18 @@ export function Reports() {
                               <React.Fragment key={l2FullKey}>
                                 {/* LEVEL 2: Operation */}
                                 <Table.Tr
-                                  className="cursor-pointer bg-slate-200 hover:bg-slate-300 dark:bg-[#25262b] border-b border-slate-300 dark:border-gray-800"
+                                  className="cursor-pointer bg-gray-50/50 hover:bg-gray-50 transition-colors"
                                   onClick={() => toggleGroup(l2FullKey)}
                                 >
-                                  <Table.Td colSpan={8} className="py-2.5">
-                                    <Group justify="space-between" ml="xl">
-                                      <Group gap="md">
-                                        <ActionIcon variant="transparent" color="dark">
+                                  <Table.Td colSpan={7} className="py-2.5">
+                                    <Group justify="space-between" ml={32}>
+                                      <Group gap="sm">
+                                        <ActionIcon variant="subtle" color="gray" size="sm">
                                           {expandedGroups[l2FullKey] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                                         </ActionIcon>
                                         <Checkbox
                                           size="sm"
-                                          color="blue"
+                                          color="indigo"
                                           checked={l2Node.txs.length > 0 && l2Node.txs.every((t: any) => selectedIds.includes(t.id))}
                                           indeterminate={l2Node.txs.some((t: any) => selectedIds.includes(t.id)) && !l2Node.txs.every((t: any) => selectedIds.includes(t.id))}
                                           onChange={(e) => {
@@ -894,10 +882,8 @@ export function Reports() {
                                           }}
                                           onClick={(e) => e.stopPropagation()}
                                         />
-                                        <Text size="sm" fw={600} className="text-slate-800 dark:text-gray-200">
-                                          Operation: {l2Key}
-                                        </Text>
-                                        <Badge size="xs" variant="filled" color="gray">{l2Node.txs.length} items</Badge>
+                                        <Text size="sm" fw={600} className="text-gray-700">{l2Key}</Text>
+                                        <Badge size="xs" variant="outline" color="gray" radius="xl">{l2Node.txs.length}</Badge>
                                       </Group>
                                     </Group>
                                   </Table.Td>
@@ -909,18 +895,18 @@ export function Reports() {
                                     <React.Fragment key={l3FullKey}>
                                       {/* LEVEL 3: M/C No */}
                                       <Table.Tr
-                                        className="cursor-pointer bg-slate-100 hover:bg-slate-200 dark:bg-[#2c2e33]/50 border-b border-slate-200 dark:border-gray-800/50"
+                                        className="cursor-pointer bg-gray-50/80 hover:bg-gray-100 transition-colors"
                                         onClick={() => toggleGroup(l3FullKey)}
                                       >
-                                        <Table.Td colSpan={8} className="py-2">
-                                          <Group justify="space-between" ml={60}>
-                                            <Group gap="md">
-                                              <ActionIcon variant="transparent" color="dark">
+                                        <Table.Td colSpan={7} className="py-2">
+                                          <Group justify="space-between" ml={64}>
+                                            <Group gap="sm">
+                                              <ActionIcon variant="subtle" color="gray" size="sm">
                                                 {expandedGroups[l3FullKey] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                               </ActionIcon>
                                               <Checkbox
                                                 size="sm"
-                                                color="blue"
+                                                color="indigo"
                                                 checked={l3Node.txs.length > 0 && l3Node.txs.every((t: any) => selectedIds.includes(t.id))}
                                                 indeterminate={l3Node.txs.some((t: any) => selectedIds.includes(t.id)) && !l3Node.txs.every((t: any) => selectedIds.includes(t.id))}
                                                 onChange={(e) => {
@@ -929,142 +915,126 @@ export function Reports() {
                                                 }}
                                                 onClick={(e) => e.stopPropagation()}
                                               />
-                                              <Text size="sm" fw={600} className="text-slate-700 dark:text-gray-300">
-                                                M/C No: {l3Key}
-                                              </Text>
-                                              <Badge size="xs" variant="outline" color="gray">{l3Node.txs.length} items</Badge>
+                                              <Text size="sm" fw={600} className="text-gray-600">{l3Key}</Text>
                                             </Group>
                                             <Group>
-                                              {canApprove && l3Node.txs.some((tx: any) => tx.status === 'PASSED' && !tx.approvedById) ? (
-                                                <Button
-                                                  size="compact-xs"
-                                                  color="green"
-                                                  onClick={(e) => { e.stopPropagation(); handleBulkApprove(l3Node.txs); }}
-                                                >
-                                                  Bulk Approve
+                                              {canApprove && l3Node.txs.some((tx: any) => tx.status === 'PASSED' && !tx.approvedById) && (
+                                                <Button size="compact-xs" color="green" variant="light" onClick={(e) => { e.stopPropagation(); handleBulkApprove(l3Node.txs); }}>
+                                                  Approve All
                                                 </Button>
-                                              ) : null}
+                                              )}
                                             </Group>
                                           </Group>
                                         </Table.Td>
                                       </Table.Tr>
 
+                                      {/* LEVEL 4: Items */}
                                       {expandedGroups[l3FullKey] && l3Node.txs.map((item: any) => (
                                         <Table.Tr
                                           key={item.id}
-                                          className={
-                                            selectedIds.includes(item.id) ? 'bg-red-50/40 dark:bg-red-900/20'
-                                              : item.status === 'REJECTED' ? 'bg-orange-50/40 dark:bg-orange-900/20' 
-                                            : 'bg-white hover:bg-slate-50 dark:bg-[#1a1b1e] dark:hover:bg-[#25262b] transition-colors'
-                                      }
-                                    >
-                                      {/* No artificial padding left here to preserve table columns */}
-                                      <Table.Td>
-                                        <Checkbox
-                                          checked={selectedIds.includes(item.id)}
-                                          onChange={(e) => {
-                                            if (e.currentTarget.checked) {
-                                              setSelectedIds(prev => [...prev, item.id]);
-                                            } else {
-                                              setSelectedIds(prev => prev.filter(id => id !== item.id));
-                                            }
-                                          }}
-                                        />
-                                      </Table.Td>
-                                      <Table.Td>
-                                        <Text size="sm" fw={500}>{new Date(item.inspectionTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-                                      </Table.Td>
-                                      <Table.Td>
-                                        <Text size="xs" c="dimmed">{item.part?.partNumber} / {item.operation?.operationNumber}</Text>
-                                      </Table.Td>
-                                      <Table.Td>
-                                        <Badge variant="light" color="gray" size="sm">{item.shift?.name}</Badge>
-                                      </Table.Td>
-                                      <Table.Td>
-                                        <Text size="sm" fw={500}>{item.lotNumber || '-'}</Text>
-                                      </Table.Td>
-                                      <Table.Td>
-                                        <Text size="sm" c="dimmed">{item.inspector?.name}</Text>
-                                      </Table.Td>
-                                      <Table.Td>
-                                        <Badge
-                                          color={item.status === 'PASSED' ? 'teal' : 'red'}
-                                          variant={item.status === 'PASSED' ? 'light' : 'filled'}
-                                          size="sm"
+                                          className={`transition-colors ${
+                                            selectedIds.includes(item.id) 
+                                              ? 'bg-indigo-50/50' 
+                                              : 'hover:bg-gray-50 bg-white'
+                                          }`}
                                         >
-                                          {item.status}
-                                        </Badge>
-                                      </Table.Td>
-                                      <Table.Td>
-                                        <Group gap="xs" wrap="nowrap">
-                                          <ActionIcon variant="light" color="blue" onClick={() => navigate(`/reports/${item.id}`)}>
-                                            <Eye size={16} />
-                                          </ActionIcon>
-                                          <ActionIcon variant="light" color="gray" onClick={() => navigate(`/reports/${item.id}`)}>
-                                            <Printer size={16} />
-                                          </ActionIcon>
-                                          {item.status === 'REJECTED' && (
-                                            <Tooltip label="Take Action — Correct failed values">
-                                              <ActionIcon
-                                                variant="light"
-                                                color="orange"
-                                                onClick={() => handleTakeAction(item.id)}
-                                              >
-                                                <Wrench size={16} />
+                                          <Table.Td style={{ width: 40, borderBottom: 'none' }}>
+                                            <div className="ml-[96px]">
+                                              <Checkbox
+                                                checked={selectedIds.includes(item.id)}
+                                                onChange={(e) => {
+                                                  if (e.currentTarget.checked) {
+                                                    setSelectedIds(prev => [...prev, item.id]);
+                                                  } else {
+                                                    setSelectedIds(prev => prev.filter(id => id !== item.id));
+                                                  }
+                                                }}
+                                                color="indigo"
+                                              />
+                                            </div>
+                                          </Table.Td>
+                                          <Table.Td style={{ borderBottom: 'none' }}>
+                                            <Group gap="sm">
+                                              <div>
+                                                <Text size="sm" fw={600} className="text-gray-900">{item.part?.customer?.name} - {item.part?.partNumber}</Text>
+                                                <Text size="xs" c="dimmed">{item.operation?.operationNumber} {item.mcNo ? `• M/C: ${item.mcNo}` : ''}</Text>
+                                              </div>
+                                            </Group>
+                                          </Table.Td>
+                                          <Table.Td style={{ borderBottom: 'none' }}>
+                                            <Text size="sm" fw={500} className="text-gray-700">{item.shift?.name}</Text>
+                                            <Text size="xs" c="dimmed">Lot: {item.lotNumber || '-'}</Text>
+                                          </Table.Td>
+                                          <Table.Td style={{ borderBottom: 'none' }}>
+                                            <Group gap="xs">
+                                              <Avatar radius="xl" size="sm" color="gray" src={undefined}>
+                                                {item.inspector?.name?.charAt(0) || 'U'}
+                                              </Avatar>
+                                              <Text size="sm" fw={500} className="text-gray-700">{item.inspector?.name}</Text>
+                                            </Group>
+                                          </Table.Td>
+                                          <Table.Td style={{ borderBottom: 'none' }}>
+                                            <Group gap="xs">
+                                              {item.status === 'PASSED' ? (
+                                                <Badge color="green" variant="dot" size="md" className="border-none bg-transparent shadow-none px-0">100% OK</Badge>
+                                              ) : (
+                                                <Badge color="red" variant="dot" size="md" className="border-none bg-transparent shadow-none px-0">Failed</Badge>
+                                              )}
+                                            </Group>
+                                          </Table.Td>
+                                          <Table.Td style={{ borderBottom: 'none' }}>
+                                            <Text size="sm" className="text-gray-700">{new Date(item.inspectionTimestamp).toLocaleDateString()}</Text>
+                                            <Text size="xs" c="dimmed">{new Date(item.inspectionTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                                          </Table.Td>
+                                          <Table.Td style={{ borderBottom: 'none' }}>
+                                            <Group gap="xs" wrap="nowrap">
+                                              <ActionIcon variant="subtle" color="gray" onClick={() => navigate(`/reports/${item.id}`)}>
+                                                <Eye size={16} />
                                               </ActionIcon>
-                                            </Tooltip>
-                                          )}
-                                          <Tooltip label="View Audit Trail">
-                                            <ActionIcon
-                                              variant="light"
-                                              color="cyan"
-                                              onClick={() => handleViewAuditTrail(item.id)}
-                                            >
-                                              <History size={16} />
-                                            </ActionIcon>
-                                          </Tooltip>
-                                          {item.status === 'PASSED' && !item.approvedById && canApprove && (
-                                            <ActionIcon
-                                              variant="light"
-                                              color="violet"
-                                              onClick={() => {
-                                                setApprovalId(item.id);
-                                                setReviewedChecked(false);
-                                              }}
-                                              loading={approveMutation.isPending && approvalId === item.id}
-                                            >
-                                              <FileCheck size={16} />
-                                            </ActionIcon>
-                                          )}
-                                          {isAdmin && (
-                                            <Tooltip label="Delete Report">
-                                              <ActionIcon
-                                                variant="light"
-                                                color="red"
-                                                onClick={() => handleDelete(item.id)}
-                                                loading={deleteMutation.isPending}
-                                              >
-                                                <Trash2 size={16} />
+                                              <ActionIcon variant="subtle" color="gray" onClick={() => navigate(`/reports/${item.id}`)}>
+                                                <Printer size={16} />
                                               </ActionIcon>
-                                            </Tooltip>
-                                          )}
-                                        </Group>
-                                      </Table.Td>
-                                    </Table.Tr>
-                                  ))}
+                                              {item.status === 'REJECTED' && (
+                                                <Tooltip label="Take Action">
+                                                  <ActionIcon variant="light" color="orange" onClick={() => handleTakeAction(item.id)}>
+                                                    <Wrench size={16} />
+                                                  </ActionIcon>
+                                                </Tooltip>
+                                              )}
+                                              <Tooltip label="Audit Trail">
+                                                <ActionIcon variant="subtle" color="gray" onClick={() => handleViewAuditTrail(item.id)}>
+                                                  <History size={16} />
+                                                </ActionIcon>
+                                              </Tooltip>
+                                              {item.status === 'PASSED' && !item.approvedById && canApprove && (
+                                                <ActionIcon variant="light" color="violet" onClick={() => { setApprovalId(item.id); setReviewedChecked(false); }}>
+                                                  <FileCheck size={16} />
+                                                </ActionIcon>
+                                              )}
+                                              {isAdmin && (
+                                                <Tooltip label="Delete">
+                                                  <ActionIcon variant="subtle" color="red" onClick={() => handleDelete(item.id)}>
+                                                    <Trash2 size={16} />
+                                                  </ActionIcon>
+                                                </Tooltip>
+                                              )}
+                                            </Group>
+                                          </Table.Td>
+                                        </Table.Tr>
+                                      ))}
                                     </React.Fragment>
                                   )
                                 })}
                               </React.Fragment>
                             )
                           })}
-                    </React.Fragment>
-                  ))}
-                </Table.Tbody>
+                        </React.Fragment>
+                      ))}
+                    </Table.Tbody>
                 </Table>
               </div>
             )}
-          </Paper>
+          </Box>
         </Tabs.Panel>
 
         <Tabs.Panel value="daily">
