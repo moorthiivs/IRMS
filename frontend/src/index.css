@@ -34,6 +34,18 @@
   font-display: swap;
 }
 
+:root {
+  font-family: Inter, sans-serif;
+  font-feature-settings: 'liga' 1, 'calt' 1;
+  /* fix for Chrome */
+}
+
+@supports (font-variation-settings: normal) {
+  :root {
+    font-family: InterVariable, sans-serif;
+  }
+}
+
 @layer base {
   :root {
     --background: 222.2 84% 4.9%;
@@ -66,7 +78,11 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-h1, h2, h3, h4, .font-display {
+h1,
+h2,
+h3,
+h4,
+.font-display {
   font-family: var(--app-font-family, 'Inter'), sans-serif;
 }
 
@@ -75,13 +91,16 @@ h1, h2, h3, h4, .font-display {
   width: 6px;
   height: 6px;
 }
+
 ::-webkit-scrollbar-track {
   background: rgba(15, 23, 42, 0.5);
 }
+
 ::-webkit-scrollbar-thumb {
   background: rgba(148, 163, 184, 0.3);
   border-radius: 9999px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.5);
 }
@@ -138,7 +157,8 @@ h1, h2, h3, h4, .font-display {
     print-color-adjust: exact !important;
   }
 
-  th, td {
+  th,
+  td {
     border: 1px solid #1e293b !important;
     color: black !important;
     padding: 4px 6px !important;

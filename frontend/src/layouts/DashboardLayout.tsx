@@ -4,12 +4,14 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopNavbar } from '@/components/layout/TopNavbar';
 import { useAuthStore } from '@/store/auth-store';
-import { LogOut, User as UserIcon, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { LogOut, User as UserIcon, PanelLeftClose, PanelLeftOpen, Sun, Moon } from 'lucide-react';
+import { useMantineColorScheme } from '@mantine/core';
 
 export function DashboardLayout() {
   const [mobileOpened, { toggle: toggleMobile }] = useDisclosure();
   const [desktopCollapsed, { toggle: toggleDesktop }] = useDisclosure(false);
   const { user, logout, appMode, setAppMode } = useAuthStore();
+  const { toggleColorScheme, colorScheme } = useMantineColorScheme();
 
   const navigate = useNavigate();
 
@@ -79,6 +81,12 @@ export function DashboardLayout() {
               <Menu.Dropdown>
                 <Menu.Item leftSection={<UserIcon size={14} />}>
                   Profile
+                </Menu.Item>
+                <Menu.Item 
+                  leftSection={colorScheme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+                  onClick={() => toggleColorScheme()}
+                >
+                  {colorScheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
                 </Menu.Item>
                 <Menu.Divider />
                 <Menu.Item 

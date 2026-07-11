@@ -94,7 +94,7 @@ export function ActiveMachineSelectorModal({
         </Button>
       </Group>
 
-      <Paper withBorder p="md" mb="md" bg="gray.0" className="dark:bg-[#1a1b1e]">
+      <Paper withBorder p="md" mb="md" className="dark:bg-[#1a1b1e]">
         <Group justify="space-between" mb="md">
           <Checkbox 
             label={`Select All (${filteredMachines.length})`}
