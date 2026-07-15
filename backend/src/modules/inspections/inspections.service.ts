@@ -861,8 +861,8 @@ export class InspectionsService {
     // Build daily aggregation per parameter
     // Structure: { parameterId: { date: { min, max, avg, count, shiftCounts: { [shiftName]: count }, readings: [] } } }
     const trendMap: Record<string, Record<string, { 
-      min: number; 
-      max: number; 
+      min: number | null; 
+      max: number | null; 
       sum: number; 
       count: number; 
       shiftCounts: Record<string, number>;
@@ -873,35 +873,38 @@ export class InspectionsService {
       const dateStr = toLocalDateStr(tx.inspectionTimestamp);
       const shiftName = tx.shift?.name || 'Unassigned Shift';
       tx.details.forEach(detail => {
-        const val = parseFloat(detail.observedValue);
-        if (isNaN(val)) return; // Skip non-numeric values
+        const rawValue = detail.observedValue;
+        const val = parseFloat(rawValue);
+        const isNum = !isNaN(val);
 
         if (!trendMap[detail.parameterId]) trendMap[detail.parameterId] = {};
         if (!trendMap[detail.parameterId][dateStr]) {
           trendMap[detail.parameterId][dateStr] = { 
-            min: val, 
-            max: val, 
-            sum: val, 
+            min: isNum ? val : null, 
+            max: isNum ? val : null, 
+            sum: isNum ? val : 0, 
             count: 1, 
             shiftCounts: { [shiftName]: 1 },
             readings: [{
               shiftName,
               interval: tx.intervalName,
-              value: detail.observedValue,
+              value: rawValue,
               timestamp: tx.inspectionTimestamp
             }]
           };
         } else {
           const entry = trendMap[detail.parameterId][dateStr];
-          entry.min = Math.min(entry.min, val);
-          entry.max = Math.max(entry.max, val);
-          entry.sum += val;
+          if (isNum) {
+            entry.min = entry.min === null ? val : Math.min(entry.min, val);
+            entry.max = entry.max === null ? val : Math.max(entry.max, val);
+            entry.sum += val;
+          }
           entry.count++;
           entry.shiftCounts[shiftName] = (entry.shiftCounts[shiftName] || 0) + 1;
           entry.readings.push({
             shiftName,
             interval: tx.intervalName,
-            value: detail.observedValue,
+            value: rawValue,
             timestamp: tx.inspectionTimestamp
           });
         }
@@ -933,7 +936,7 @@ export class InspectionsService {
             date,
             min: entry ? entry.min : null,
             max: entry ? entry.max : null,
-            avg: entry ? Math.round((entry.sum / entry.count) * 1000) / 1000 : null,
+            avg: (entry && entry.min !== null) ? Math.round((entry.sum / entry.count) * 1000) / 1000 : null,
             count: entry ? entry.count : 0,
             shiftCounts: entry ? entry.shiftCounts : {},
             readings: entry ? entry.readings : [],

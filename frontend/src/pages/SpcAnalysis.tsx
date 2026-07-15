@@ -3,7 +3,7 @@ import { Title, Paper, Select, Button, Group, Text, SimpleGrid, Switch, ActionIc
 import { DatePickerInput } from '@mantine/dates';
 import { useQuery } from '@tanstack/react-query';
 import ReactECharts from 'echarts-for-react';
-import { Download, Printer, Settings as SettingsIcon, FileSpreadsheet, ImageIcon, CheckCircle2, XCircle } from 'lucide-react';
+import { Download, Printer, Settings as SettingsIcon, FileSpreadsheet, ImageIcon, CheckCircle2, XCircle, Maximize, Minimize, AlertTriangle } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { masterDataService } from '../services/master-data.service';
 import { inspectionService } from '../services/inspection.service';
@@ -40,6 +40,7 @@ export function SpcAnalysis() {
   const [customUsl, setCustomUsl] = useState<number | ''>('');
   const [customLsl, setCustomLsl] = useState<number | ''>('');
   const [customSigma, setCustomSigma] = useState<number | ''>('');
+  const [isFullView, setIsFullView] = useState(false);
 
   // Queries
   const { data: parts = [] } = useQuery({
@@ -78,18 +79,25 @@ export function SpcAnalysis() {
   
   // Extract all individual readings across the date range for the selected parameter
   const extractReadings = () => {
-    if (!trendData || !selectedParam || !trendData.parameters) return [];
+    if (!trendData || !selectedParam || !trendData.parameters) return { readings: [], isAttributeMode: false };
     const paramData = trendData.parameters.find((p: any) => p.parameterId === selectedParam);
-    if (!paramData || !paramData.daily) return [];
+    if (!paramData || !paramData.daily) return { readings: [], isAttributeMode: false };
 
     let allReadings: any[] = [];
+    let hasNonNumeric = false;
     trendData.dateLabels.forEach((dateStr: string, index: number) => {
       const dailyObj = paramData.daily[index];
       if (dailyObj && dailyObj.readings && dailyObj.readings.length > 0) {
         dailyObj.readings.forEach((r: any) => {
+          const parsed = parseFloat(r.value);
+          const rawStr = String(r.value || '').trim();
+          if (isNaN(parsed) && rawStr !== '') {
+            hasNonNumeric = true;
+          }
           allReadings.push({
             date: dateStr,
-            value: parseFloat(r.value),
+            rawValue: r.value,
+            value: parsed,
             timestamp: r.timestamp,
             shiftName: r.shiftName,
             interval: r.interval
@@ -99,10 +107,15 @@ export function SpcAnalysis() {
     });
     // Sort by timestamp
     allReadings.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-    return allReadings.filter(r => !isNaN(r.value));
+    
+    if (hasNonNumeric) {
+      return { readings: allReadings, isAttributeMode: true };
+    }
+    
+    return { readings: allReadings.filter(r => !isNaN(r.value)), isAttributeMode: false };
   };
 
-  const readings = extractReadings();
+  const { readings, isAttributeMode } = extractReadings();
   const rawValues = readings.map(r => r.value);
   
   const usl = customUsl !== '' ? customUsl : (activeParam?.controlLimitMax !== undefined ? activeParam.controlLimitMax : null);
@@ -114,8 +127,71 @@ export function SpcAnalysis() {
   const buildChartOption = () => {
     if (readings.length === 0) return {};
 
-    const dataSeries = readings.map(r => r.value);
     const xAxisLabels = readings.map((r) => `${r.date} ${new Date(r.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`);
+
+    if (isAttributeMode) {
+      const dataSeries = readings.map(r => {
+        const val = String(r.rawValue).trim().toLowerCase();
+        const isFail = val === 'ng' || val === 'fail' || val === 'not ok' || val === 'not okay' || val === 'nok';
+        return isFail ? 'Fail' : 'Pass';
+      });
+
+      return {
+        title: { text: activeParam ? `${activeParam.parameterName} Attribute Chart` : 'Attribute Chart', left: 'center' },
+        tooltip: {
+          trigger: 'item',
+          formatter: function (params: any) {
+            const r = readings[params.dataIndex];
+            return `
+              <div style="font-weight:bold;margin-bottom:5px;">${r.date}</div>
+              Shift: ${r.shiftName} - ${r.interval}<br/>
+              Time: ${new Date(r.timestamp).toLocaleTimeString()}<br/>
+              <strong>Status: ${r.rawValue}</strong>
+            `;
+          }
+        },
+        toolbox: {
+          feature: {
+            dataZoom: {},
+            restore: {},
+          }
+        },
+        grid: { left: '5%', right: '8%', bottom: '10%', top: '15%', containLabel: true },
+        dataZoom: [
+          { type: 'inside', start: 0, end: 100 },
+          { type: 'slider', start: 0, end: 100 }
+        ],
+        xAxis: {
+          type: 'category',
+          data: xAxisLabels,
+          boundaryGap: true,
+          axisLabel: {
+            formatter: function (value: string) {
+              return value.split(' ')[0];
+            }
+          }
+        },
+        yAxis: {
+          type: 'category',
+          data: ['Fail', 'Pass']
+        },
+        series: [
+          {
+            name: 'Status',
+            type: 'scatter',
+            data: dataSeries,
+            symbolSize: 12,
+            itemStyle: {
+              color: function(params: any) {
+                return params.value === 'Fail' ? '#ef4444' : '#10b981';
+              }
+            }
+          }
+        ]
+      };
+    }
+
+    const dataSeries = readings.map(r => r.value);
 
     const markLines: any[] = [];
     
@@ -155,11 +231,11 @@ export function SpcAnalysis() {
       },
       toolbox: {
         feature: {
-          dataZoom: { yAxisIndex: 'none' },
+          dataZoom: {},
           restore: {},
         }
       },
-      grid: { left: '5%', right: '8%', bottom: '10%', top: '15%', containLabel: true },
+      grid: { left: '5%', right: '12%', bottom: '10%', top: '15%', containLabel: true },
       dataZoom: [
         { type: 'inside', start: 0, end: 100 },
         { type: 'slider', start: 0, end: 100 }
@@ -278,6 +354,11 @@ export function SpcAnalysis() {
               <Menu.Item leftSection={<FileSpreadsheet size={14} />} onClick={exportToExcel}>Export as Excel</Menu.Item>
             </Menu.Dropdown>
           </Menu>
+          <Tooltip label={isFullView ? "Show Summary" : "Full View Chart"}>
+            <ActionIcon variant={isFullView ? "filled" : "light"} size="lg" onClick={() => setIsFullView(!isFullView)} color={isFullView ? "blue" : "gray"}>
+              {isFullView ? <Minimize size={20} /> : <Maximize size={20} />}
+            </ActionIcon>
+          </Tooltip>
           <Tooltip label="Chart Configuration">
             <ActionIcon variant="light" size="lg" onClick={() => setIsSettingsOpen(true)}>
               <SettingsIcon size={20} />
@@ -332,7 +413,7 @@ export function SpcAnalysis() {
       {selectedParam && trendData ? (
         <>
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
-            <div className="lg:col-span-3">
+            <div className={isFullView ? "lg:col-span-4" : "lg:col-span-3"}>
               <Paper withBorder p="md" radius="lg" className="h-[500px] shadow-sm">
                 <ReactECharts
                   ref={echartRef}
@@ -342,43 +423,127 @@ export function SpcAnalysis() {
                 />
               </Paper>
             </div>
-            <div className="lg:col-span-1 flex flex-col gap-4">
-              <Title order={4} className="mb-2">Statistical Summary</Title>
-              <SimpleGrid cols={2} spacing="md">
-                <StatCard title="Cp" value={spcStats.cp ? spcStats.cp.toFixed(3) : 'N/A'} />
-                <StatCard title="Cpk" value={spcStats.cpk ? spcStats.cpk.toFixed(3) : 'N/A'} />
-                <StatCard title="Mean (X̄)" value={spcStats.mean.toFixed(3)} />
-                <StatCard title="Std Dev (σ)" value={spcStats.sigma.toFixed(4)} />
-                <StatCard title="UCL" value={spcStats.ucl.toFixed(3)} />
-                <StatCard title="LCL" value={spcStats.lcl.toFixed(3)} />
-                <StatCard title="Max" value={spcStats.max} />
-                <StatCard title="Min" value={spcStats.min} />
-                <StatCard title="Sample N" value={spcStats.n} />
-              </SimpleGrid>
+            {!isFullView && (
+              <div className="lg:col-span-1 flex flex-col gap-4">
+              <Title order={4} className="mb-0">Statistical Summary</Title>
               
-              {(spcStats.cpk && spcStats.cpk < 1.33) && (
-                <Paper withBorder p="md" radius="md" className="bg-red-50 dark:bg-red-900/20 border-red-300 mt-2">
-                  <div className="flex gap-2 items-center text-red-700 dark:text-red-400">
-                    <XCircle size={20} />
-                    <Text size="sm" fw={600}>Process Incapable</Text>
+              {isAttributeMode ? (() => {
+                const totalN = readings.length;
+                const passed = readings.filter(r => {
+                  const val = String(r.rawValue).trim().toLowerCase();
+                  return !(val === 'ng' || val === 'fail' || val === 'not ok' || val === 'not okay' || val === 'nok');
+                }).length;
+                const yieldPct = totalN > 0 ? (passed / totalN) * 100 : 0;
+                
+                return (
+                  <Paper 
+                    withBorder 
+                    p="sm" 
+                    radius="md" 
+                    className={
+                      yieldPct < 95 ? 'bg-red-50 dark:bg-red-900/20 border-red-300' :
+                      yieldPct < 99.9 ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300' :
+                      'bg-blue-50 dark:bg-blue-900/20 border-blue-300'
+                    }
+                  >
+                    <div className={`flex gap-2 items-center ${
+                      yieldPct < 95 ? 'text-red-700 dark:text-red-400' :
+                      yieldPct < 99.9 ? 'text-amber-700 dark:text-amber-400' :
+                      'text-blue-700 dark:text-blue-400'
+                    }`}>
+                      {yieldPct < 95 ? <XCircle size={18} /> : yieldPct < 99.9 ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
+                      <Text size="sm" fw={700}>
+                        {yieldPct < 95 ? 'Fail (High Defect Rate)' : yieldPct < 99.9 ? 'Good (Minor Defects)' : 'Excellent (Zero Defects)'}
+                      </Text>
+                    </div>
+                    <Text size="xs" mt={4} className={
+                      yieldPct < 95 ? 'text-red-600 dark:text-red-300' :
+                      yieldPct < 99.9 ? 'text-amber-700 dark:text-amber-300' :
+                      'text-blue-600 dark:text-blue-300'
+                    }>
+                      {yieldPct < 95 
+                        ? 'Process yield is below 95%. Immediate action required.' 
+                        : yieldPct < 99.9 
+                        ? 'Process yield is good but experiencing some defects.' 
+                        : 'Process is operating perfectly with 100% yield.'}
+                    </Text>
+                  </Paper>
+                );
+              })() : spcStats.cpk !== null && (
+                <Paper 
+                  withBorder 
+                  p="sm" 
+                  radius="md" 
+                  className={
+                    spcStats.cpk < 1.0 ? 'bg-red-50 dark:bg-red-900/20 border-red-300' :
+                    spcStats.cpk < 1.33 ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300' :
+                    spcStats.cpk < 1.67 ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300' :
+                    'bg-blue-50 dark:bg-blue-900/20 border-blue-300'
+                  }
+                >
+                  <div className={`flex gap-2 items-center ${
+                    spcStats.cpk < 1.0 ? 'text-red-700 dark:text-red-400' :
+                    spcStats.cpk < 1.33 ? 'text-amber-700 dark:text-amber-400' :
+                    spcStats.cpk < 1.67 ? 'text-emerald-700 dark:text-emerald-400' :
+                    'text-blue-700 dark:text-blue-400'
+                  }`}>
+                    {spcStats.cpk < 1.0 ? <XCircle size={18} /> : spcStats.cpk < 1.33 ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
+                    <Text size="sm" fw={700}>
+                      {spcStats.cpk < 1.0 ? 'Fail (Incapable)' : spcStats.cpk < 1.33 ? 'Average (Needs Improvement)' : spcStats.cpk < 1.67 ? 'Good (Capable)' : 'Excellent (Highly Capable)'}
+                    </Text>
                   </div>
-                  <Text size="xs" mt="xs" className="text-red-600 dark:text-red-300">
-                    Cpk is below 1.33. The process variation is too wide or not centered.
+                  <Text size="xs" mt={4} className={
+                    spcStats.cpk < 1.0 ? 'text-red-600 dark:text-red-300' :
+                    spcStats.cpk < 1.33 ? 'text-amber-700 dark:text-amber-300' :
+                    spcStats.cpk < 1.67 ? 'text-emerald-600 dark:text-emerald-300' :
+                    'text-blue-600 dark:text-blue-300'
+                  }>
+                    {spcStats.cpk < 1.0 
+                      ? 'Cpk < 1.00. Process variation is wider than specification limits.' 
+                      : spcStats.cpk < 1.33 
+                      ? '1.00 ≤ Cpk < 1.33. Barely capable; variation should be reduced.' 
+                      : spcStats.cpk < 1.67
+                      ? '1.33 ≤ Cpk < 1.67. Meets quality requirements and is well centered.'
+                      : 'Cpk ≥ 1.67. Outstanding quality with very low defect rate.'}
                   </Text>
                 </Paper>
               )}
-              {(spcStats.cpk && spcStats.cpk >= 1.33) && (
-                <Paper withBorder p="md" radius="md" className="bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 mt-2">
-                  <div className="flex gap-2 items-center text-emerald-700 dark:text-emerald-400">
-                    <CheckCircle2 size={20} />
-                    <Text size="sm" fw={600}>Process Capable</Text>
-                  </div>
-                  <Text size="xs" mt="xs" className="text-emerald-600 dark:text-emerald-300">
-                    Cpk is ≥ 1.33. The process is meeting quality requirements.
-                  </Text>
-                </Paper>
+
+              {isAttributeMode ? (
+                <SimpleGrid cols={2} spacing="md">
+                  <StatCard title="Total Sample N" value={readings.length} />
+                  <StatCard title="Total Passed" value={readings.filter(r => {
+                    const val = String(r.rawValue).trim().toLowerCase();
+                    return !(val === 'ng' || val === 'fail' || val === 'not ok' || val === 'not okay' || val === 'nok');
+                  }).length} />
+                  <StatCard title="Total Failed" value={readings.filter(r => {
+                    const val = String(r.rawValue).trim().toLowerCase();
+                    return (val === 'ng' || val === 'fail' || val === 'not ok' || val === 'not okay' || val === 'nok');
+                  }).length} />
+                  <StatCard title="Yield (FPY)" value={`${(readings.length > 0 ? (readings.filter(r => {
+                    const val = String(r.rawValue).trim().toLowerCase();
+                    return !(val === 'ng' || val === 'fail' || val === 'not ok' || val === 'not okay' || val === 'nok');
+                  }).length / readings.length) * 100 : 0).toFixed(1)}%`} />
+                  <StatCard title="Defect Rate" value={`${(readings.length > 0 ? (readings.filter(r => {
+                    const val = String(r.rawValue).trim().toLowerCase();
+                    return (val === 'ng' || val === 'fail' || val === 'not ok' || val === 'not okay' || val === 'nok');
+                  }).length / readings.length) * 100 : 0).toFixed(1)}%`} />
+                </SimpleGrid>
+              ) : (
+                <SimpleGrid cols={2} spacing="md">
+                  <StatCard title="Cp" value={spcStats.cp ? spcStats.cp.toFixed(3) : 'N/A'} />
+                  <StatCard title="Cpk" value={spcStats.cpk ? spcStats.cpk.toFixed(3) : 'N/A'} />
+                  <StatCard title="Mean (X̄)" value={spcStats.mean.toFixed(3)} />
+                  <StatCard title="Std Dev (σ)" value={spcStats.sigma.toFixed(4)} />
+                  <StatCard title="UCL" value={spcStats.ucl.toFixed(3)} />
+                  <StatCard title="LCL" value={spcStats.lcl.toFixed(3)} />
+                  <StatCard title="Max" value={spcStats.max} />
+                  <StatCard title="Min" value={spcStats.min} />
+                  <StatCard title="Sample N" value={spcStats.n} />
+                </SimpleGrid>
               )}
-            </div>
+              </div>
+            )}
           </div>
 
           <Modal opened={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} title="Chart Configuration & Calculations" centered size="lg">
