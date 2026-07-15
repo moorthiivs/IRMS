@@ -764,10 +764,26 @@ export function Dashboard() {
         {/* Full Parameter Trend Chart spanning 2 columns */}
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, delay: 0.6 }} style={{ gridColumn: 'span 2' }}>
           <Paper withBorder p="md" radius="lg" style={{ height: '100%' }} className="shadow-sm">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-              <Text size="sm" fw={700}>Parameter Trend Analysis</Text>
+            <div className="flex flex-col 2xl:flex-row justify-between items-start 2xl:items-center mb-4 gap-4">
+              <div className="flex flex-wrap items-center gap-3 shrink-0">
+                <Text size="sm" fw={700} className="whitespace-nowrap">Parameter Trend Analysis</Text>
+                <Button 
+                  size="xs" 
+                  variant="light"
+                  className="whitespace-nowrap"
+                  onClick={() => {
+                    const params = new URLSearchParams();
+                    if (trendPart) params.set('partId', trendPart);
+                    if (trendOp) params.set('opId', trendOp);
+                    if (trendParam) params.set('paramId', trendParam);
+                    navigate(`/spc-analysis?${params.toString()}`);
+                  }}
+                >
+                  View Full Report
+                </Button>
+              </div>
 
-              <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+              <div className="flex flex-wrap items-center gap-2 w-full 2xl:w-auto justify-start 2xl:justify-end">
                 <Select
                   placeholder="Part"
                   size="xs"

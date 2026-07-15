@@ -33,7 +33,7 @@ export function Reports() {
     const d = searchParams.get('date');
     if (d === 'today') return new Date();
     if (d) return new Date(d);
-    return null;
+    return new Date();
   });
   const [historyShift, setHistoryShift] = useState<string | null>(null);
   const [historyPart, setHistoryPart] = useState<string | null>(null);
@@ -105,14 +105,16 @@ export function Reports() {
   
   // Fetch available options for the selected date and customer
   const { data: dailyOptions } = useQuery({
-    queryKey: ['daily-options', selectedDate, reportCustomer],
+    queryKey: ['daily-options', selectedDate, reportCustomer, selectedPart, selectedOp],
     queryFn: () => {
       const formattedDate = selectedDate ? 
         `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}` 
         : undefined;
       return inspectionService.getDailyOptions({
         date: formattedDate,
-        customerId: reportCustomer || undefined
+        customerId: reportCustomer || undefined,
+        partId: selectedPart || undefined,
+        operationId: selectedOp || undefined
       });
     },
     enabled: !!selectedDate // Only fetch if we have a date selected
@@ -597,8 +599,9 @@ export function Reports() {
       const partNo = tx.part?.partNumber || 'Unknown Part';
       const opNo = tx.operation?.operationNumber || 'Unknown Op';
       const mcNo = tx.mcNo || 'Unknown M/C';
+      const dateStr = new Date(tx.inspectionTimestamp).toLocaleDateString();
 
-      const l1 = `${custName} - ${partNo}`;
+      const l1 = `${dateStr} | ${custName} - ${partNo}`;
       const l2 = `OP: ${opNo}`;
       const l3 = `M/C: ${mcNo}`;
 
@@ -709,7 +712,7 @@ export function Reports() {
 
         <Tabs.Panel value="history">
           <Group justify="space-between" align="center" mb="lg">
-            <Group gap="sm">
+            <Group gap="sm" wrap="wrap">
               <Text size="sm" fw={600} c="dimmed">All Status ({recent.length})</Text>
               
               <DatePickerInput
@@ -718,6 +721,7 @@ export function Reports() {
                 value={historyDate}
                 onChange={setHistoryDate}
                 clearable
+                w={130}
                 styles={{ input: { border: 'none', backgroundColor: '#f1f3f5' } }}
               />
               <Select
@@ -727,6 +731,8 @@ export function Reports() {
                 value={historyShift}
                 onChange={setHistoryShift}
                 clearable
+                searchable
+                w={120}
                 styles={{ input: { border: 'none', backgroundColor: '#f1f3f5' } }}
               />
               <Select
@@ -736,6 +742,8 @@ export function Reports() {
                 value={historyCustomer}
                 onChange={(v) => { setHistoryCustomer(v); setHistoryPart(null); setHistoryOp(null); }}
                 clearable
+                searchable
+                w={150}
                 styles={{ input: { border: 'none', backgroundColor: '#f1f3f5' } }}
               />
               <Select
@@ -745,6 +753,8 @@ export function Reports() {
                 value={historyPart}
                 onChange={(v) => { setHistoryPart(v); setHistoryOp(null); }}
                 clearable
+                searchable
+                w={150}
                 styles={{ input: { border: 'none', backgroundColor: '#f1f3f5' } }}
               />
               <Select
@@ -754,7 +764,9 @@ export function Reports() {
                 value={historyOp}
                 onChange={setHistoryOp}
                 clearable
+                searchable
                 disabled={!historyPart}
+                w={120}
                 styles={{ input: { border: 'none', backgroundColor: '#f1f3f5' } }}
               />
               {(historyDate || historyShift || historyCustomer || historyPart || historyOp) && (
@@ -1054,6 +1066,7 @@ export function Reports() {
                 value={reportCustomer}
                 onChange={(v) => { setReportCustomer(v); setSelectedPart(null); setSelectedOp(null); }}
                 clearable
+                searchable
               />
               <Select
                 label="Part Number"
@@ -1061,6 +1074,7 @@ export function Reports() {
                 data={filteredReportParts.map((p: any) => ({ value: p.id, label: p.partNumber }))}
                 value={selectedPart}
                 onChange={(v) => { setSelectedPart(v); setSelectedOp(null); }}
+                searchable
               />
               <Select
                 label="Operation"
@@ -1069,9 +1083,10 @@ export function Reports() {
                 data={operations.map(o => ({ value: o.id, label: o.operationNumber }))}
                 value={selectedOp}
                 onChange={setSelectedOp}
+                searchable
               />
               <Select
-                label="M/C No. (Optional)"
+                label="M/C No"
                 placeholder="Select M/C"
                 data={reportCustomerMachines.length > 0 ? reportCustomerMachines : (selectedMcNo ? [selectedMcNo] : [])}
                 value={selectedMcNo}

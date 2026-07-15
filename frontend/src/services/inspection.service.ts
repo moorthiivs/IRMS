@@ -62,7 +62,7 @@ export const inspectionService = {
     return data;
   },
 
-  getDailyOptions: async (params: { date?: string; customerId?: string }): Promise<{ partIds: string[]; operationIds: string[]; mcNos: string[] }> => {
+  getDailyOptions: async (params: { date?: string; customerId?: string; partId?: string; operationId?: string }): Promise<{ partIds: string[]; operationIds: string[]; mcNos: string[] }> => {
     const { data } = await api.get('/inspections/daily-options', { params });
     return data;
   },

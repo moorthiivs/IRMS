@@ -518,6 +518,7 @@ export function InspectionEntry() {
             required
             withAsterisk
             disabled={customerMachines.length === 0}
+            searchable
             {...form.getInputProps('mcNo')}
           />
           <Select

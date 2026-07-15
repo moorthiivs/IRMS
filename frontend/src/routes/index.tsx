@@ -8,6 +8,7 @@ import { OTAUpdater } from '../components/OTAUpdater';
 // Lazy-loaded Pages
 const Login = lazy(() => import('../pages/Login').then(m => ({ default: m.Login })));
 const Dashboard = lazy(() => import('../pages/Dashboard').then(m => ({ default: m.Dashboard })));
+const SpcAnalysis = lazy(() => import('../pages/SpcAnalysis').then(m => ({ default: m.SpcAnalysis })));
 const InspectionEntry = lazy(() => import('../pages/InspectionEntry').then(m => ({ default: m.InspectionEntry })));
 const Reports = lazy(() => import('../pages/Reports').then(m => ({ default: m.Reports })));
 const ReportPreview = lazy(() => import('../pages/ReportPreview').then(m => ({ default: m.ReportPreview })));
@@ -74,6 +75,7 @@ export function AppRoutes() {
           
           {/* Shared/Inspector Routes */}
           <Route path="/inspection" element={<ProtectedRoute><InspectionEntry /></ProtectedRoute>} />
+          <Route path="/spc-analysis" element={<ProtectedRoute><SpcAnalysis /></ProtectedRoute>} />
           <Route path="/drafts" element={<ProtectedRoute><Drafts /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/reports/:id" element={<ProtectedRoute><ReportPreview /></ProtectedRoute>} />

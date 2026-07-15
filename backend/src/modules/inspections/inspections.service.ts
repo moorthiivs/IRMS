@@ -533,7 +533,7 @@ export class InspectionsService {
     };
   }
 
-  async getDailyOptions(user: any, dateStr: string, customerId?: string) {
+  async getDailyOptions(user: any, dateStr: string, customerId?: string, partId?: string, operationId?: string) {
     const targetDate = dateStr ? new Date(dateStr) : new Date();
     
     const startOfDay = new Date(targetDate);
@@ -550,6 +550,14 @@ export class InspectionsService {
 
     if (customerId) {
       whereBase.customerId = customerId;
+    }
+    
+    if (partId) {
+      whereBase.partId = partId;
+    }
+    
+    if (operationId) {
+      whereBase.operationId = operationId;
     }
 
     if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR' || user.role === 'INSPECTOR') && user.customerId) {

@@ -83,8 +83,10 @@ export class InspectionsController {
     @Request() req,
     @Query('date') date: string,
     @Query('customerId') customerId: string,
+    @Query('partId') partId?: string,
+    @Query('operationId') operationId?: string,
   ) {
-    return this.inspectionsService.getDailyOptions(req.user, date, customerId);
+    return this.inspectionsService.getDailyOptions(req.user, date, customerId, partId, operationId);
   }
 
   @Get('daily')
