@@ -10,6 +10,7 @@ import { Eye, Printer, FileText, Search, LayoutGrid, CheckCircle, FileCheck, Wre
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { inspectionService } from '../services/inspection.service';
 import { masterDataService } from '../services/master-data.service';
+import { settingsService } from '../services/settings.service';
 import { useAuthStore } from '../store/auth-store';
 import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
@@ -20,6 +21,11 @@ export function Reports() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
+
+  const { data: settings = {} } = useQuery({
+    queryKey: ['settings'],
+    queryFn: settingsService.getAll,
+  });
   const isAdmin = user?.role === 'ADMIN';
   const canApprove = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
   const [activeTab, setActiveTab] = useState<string | null>('history');
@@ -1349,10 +1355,20 @@ export function Reports() {
                 {/* Left section: Logo + Company info + Date / Machine info */}
                 <div className="w-[35%] p-3 border-r border-black flex flex-col justify-between">
                   <div className="flex items-center gap-2">
-                    <img src="/tvs_logo.jpeg" alt="TVS Logo" className="h-10 w-auto object-contain" />
+                    <div className="h-12 w-[120px] flex items-center justify-center shrink-0">
+                      <img 
+                        src={settings.report_logo || "/tvs_logo.jpeg"} 
+                        alt="Report Logo" 
+                        className="max-h-12 max-w-full object-contain" 
+                      />
+                    </div>
                     <div>
-                      <div className="font-bold text-lg mb-1 text-[#000080] dark:text-blue-300">Sundram Fasteners Limited,</div>
-                      <div className="text-xs text-[#000080] dark:text-blue-300">Autolec Division, Plant - II.</div>
+                      <div className="font-bold text-lg mb-1 text-[#000080] dark:text-blue-300">
+                        {settings.report_company_name || "Sundram Fasteners Limited,"}
+                      </div>
+                      {!settings.report_company_name && (
+                        <div className="text-xs text-[#000080] dark:text-blue-300">Autolec Division, Plant - II.</div>
+                      )}
                     </div>
                   </div>
                   <div className="mt-3 space-y-1 text-xs">

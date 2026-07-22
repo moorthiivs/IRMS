@@ -12,6 +12,7 @@ import { settingsService } from '../services/settings.service';
 import { notifications } from '@mantine/notifications';
 import api from '../lib/axios';
 import { useAppStore } from '../store/app-store';
+import { ReportLogoUploader } from '../components/ReportLogoUploader';
 
 export function Settings() {
   const queryClient = useQueryClient();
@@ -39,6 +40,7 @@ export function Settings() {
   const [reportRNo, setReportRNo] = useState('03');
   const [reportRDate, setReportRDate] = useState('23.04.2023');
   const [reportDocNumber, setReportDocNumber] = useState('TAF/P2/9.4');
+  const [reportLogo, setReportLogo] = useState<string | null>(null);
 
   // SMTP Settings state
   const [smtpHost, setSmtpHost] = useState('');
@@ -105,6 +107,7 @@ export function Settings() {
     if (settings.report_r_no) setReportRNo(settings.report_r_no);
     if (settings.report_r_date) setReportRDate(settings.report_r_date);
     if (settings.report_doc_number) setReportDocNumber(settings.report_doc_number);
+    setReportLogo(settings.report_logo || null);
     if (settings.smtp_host) setSmtpHost(settings.smtp_host);
     if (settings.smtp_port) setSmtpPort(settings.smtp_port);
     if (settings.smtp_user) setSmtpUser(settings.smtp_user);
@@ -154,6 +157,7 @@ export function Settings() {
       updateMutation.mutateAsync({ key: 'report_r_no', value: reportRNo }),
       updateMutation.mutateAsync({ key: 'report_r_date', value: reportRDate }),
       updateMutation.mutateAsync({ key: 'report_doc_number', value: reportDocNumber }),
+      updateMutation.mutateAsync({ key: 'report_logo', value: reportLogo || '' }),
     ]).then(() => {
       notifications.show({ title: 'Report Template Saved', message: 'All report template settings saved successfully.', color: 'green' });
     }).catch(() => {
@@ -401,6 +405,8 @@ export function Settings() {
           </Text>
 
           <Stack gap="sm">
+            <ReportLogoUploader value={reportLogo} onChange={setReportLogo} />
+            <Divider my="xs" label="Report Header Text Settings" labelPosition="center" />
             <TextInput
               label="Company Name"
               description="Full company name displayed in the report header"

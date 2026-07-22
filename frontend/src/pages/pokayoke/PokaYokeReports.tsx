@@ -362,6 +362,7 @@ export function PokaYokeReports() {
     rNo: settings.report_r_no || '03',
     rDate: settings.report_r_date || '23.04.2023',
     docNumber: settings.report_doc_number || 'TAF/P2/9.4',
+    logo: settings.report_logo || null,
   };
 
   const { data: reportData, isLoading } = useQuery({
@@ -642,11 +643,21 @@ export function PokaYokeReports() {
                       <Table.Tr>
                         <Table.Th 
                           colSpan={1} 
-                          style={{ backgroundColor: '#204080', color: 'white', textAlign: 'center', padding: '10px' }}
+                          style={{ backgroundColor: '#204080', color: 'white', textAlign: 'center', padding: '8px 10px', verticalAlign: 'middle' }}
                         >
-                          <div style={{ display: 'inline-flex', border: '2px solid white', borderRadius: '50%', width: 50, height: 50, alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
-                            <Text fw={900} size="lg" style={{ fontStyle: 'italic', letterSpacing: '-1px' }}>TVS</Text>
-                          </div>
+                          {tpl.logo ? (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 50, maxHeight: 60, width: '100%' }}>
+                              <img 
+                                src={tpl.logo} 
+                                alt="Report Logo" 
+                                style={{ maxHeight: '52px', maxWidth: '120px', objectFit: 'contain' }} 
+                              />
+                            </div>
+                          ) : (
+                            <div style={{ display: 'inline-flex', border: '2px solid white', borderRadius: '50%', width: 50, height: 50, alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
+                              <Text fw={900} size="lg" style={{ fontStyle: 'italic', letterSpacing: '-1px' }}>TVS</Text>
+                            </div>
+                          )}
                         </Table.Th>
                         <Table.Th colSpan={4 + dateColumns.length} style={{ padding: '12px' }}>
                           <Text fw={800} size="sm">{tpl.companyName}</Text>

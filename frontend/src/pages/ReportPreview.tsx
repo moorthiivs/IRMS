@@ -3,6 +3,7 @@ import { Title, Paper, Group, Button, Table, Text, Modal, Checkbox, Badge, TextI
 import { Printer, ArrowLeft, FileCheck, Wrench, History, ArrowRight, Trash2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inspectionService } from '../services/inspection.service';
+import { settingsService } from '../services/settings.service';
 import { useAuthStore } from '../store/auth-store';
 import { notifications } from '@mantine/notifications';
 import { useState } from 'react';
@@ -33,6 +34,11 @@ export function ReportPreview() {
     queryKey: ['inspection', id],
     queryFn: () => inspectionService.getById(id!),
     enabled: !!id
+  });
+
+  const { data: settings = {} } = useQuery({
+    queryKey: ['settings'],
+    queryFn: settingsService.getAll,
   });
 
   const approveMutation = useMutation({
@@ -208,10 +214,26 @@ export function ReportPreview() {
       {/* A4 Landscape Print Area */}
       <Paper withBorder p="xl" className="print:border-0 print:p-0 bg-white dark:bg-[#1a1b1e] min-h-[500px] overflow-x-auto print:overflow-visible">
         <div className="min-w-[800px] print:min-w-full">
-          <div className="text-center mb-6">
-            <Title order={3}>YNC Cover plate check sheet</Title>
-            <Text>Part: {inspection.part?.partNumber} | Operation: {inspection.operation?.operationNumber}</Text>
-            <Text>Date: {new Date(inspection.inspectionTimestamp).toLocaleDateString()}</Text>
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-[120px] flex items-center justify-center shrink-0">
+                <img
+                  src={settings.report_logo || "/tvs_logo.jpeg"}
+                  alt="Report Logo"
+                  className="max-h-12 max-w-full object-contain"
+                />
+              </div>
+              <div>
+                <Text fw={700} size="md" className="text-[#000080] dark:text-blue-300">
+                  {settings.report_company_name || "Sundram Fasteners Limited"}
+                </Text>
+              </div>
+            </div>
+            <div className="text-right">
+              <Title order={3}>YNC Cover plate check sheet</Title>
+              <Text size="sm">Part: {inspection.part?.partNumber} | Operation: {inspection.operation?.operationNumber}</Text>
+              <Text size="xs" c="dimmed">Date: {new Date(inspection.inspectionTimestamp).toLocaleDateString()}</Text>
+            </div>
           </div>
 
           <Table withTableBorder withColumnBorders>
