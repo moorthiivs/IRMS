@@ -103,16 +103,37 @@ export function PokaYokeExcelUpload({ onUploadSuccess }: { onUploadSuccess?: () 
     }
   };
 
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await fetch('/upload_poka_yoke.xlsx');
+      if (!response.ok) throw new Error('Template file not found');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'upload_poka_yoke.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      notifications.show({
+        title: 'Download Failed',
+        message: 'Failed to download template file',
+        color: 'red',
+        icon: <X size={16} />,
+      });
+    }
+  };
+
   return (
     <div>
       <Group justify="space-between" mb="lg">
         <Title order={2}>Poka Yoke Master Data Upload</Title>
         <Button
-          component="a"
-          href="/upload_poka_yoke.xlsx"
-          download
           variant="light"
           leftSection={<Download size={16} />}
+          onClick={handleDownloadTemplate}
         >
           Download Template
         </Button>

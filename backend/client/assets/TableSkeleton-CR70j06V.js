@@ -1,0 +1,1 @@
+import{j as r,ap as e}from"./index-t2Hr1fo3.js";import{S as s}from"./Skeleton-Bsk-M3l8.js";function n({rows:t=5}){return r.jsxs(e,{gap:"md",mt:"md",children:[r.jsx(s,{height:40,radius:"sm"}),Array.from({length:t}).map((m,a)=>r.jsx(s,{height:50,radius:"sm"},a))]})}export{n as T};
