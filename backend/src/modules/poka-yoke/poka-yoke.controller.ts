@@ -102,7 +102,7 @@ export class PokaYokeController {
   }
 
   @Get('drafts')
-  async getDraft(@Request() req, @Query('partId') partId: string) {
+  async getDraft(@Request() req, @Query('partId') partId?: string) {
     return this.pokaYokeService.getDraft(req.user.id, partId);
   }
 

@@ -393,11 +393,25 @@ export class PokaYokeService {
 
   // --- Draft Management ---
 
-  async getDraft(userId: string, partId: string) {
-    return this.prisma.pokaYokeDraft.findUnique({
-      where: {
-        userId_partId: { userId, partId }
-      }
+  async getDraft(userId: string, partId?: string) {
+    if (partId) {
+      return this.prisma.pokaYokeDraft.findUnique({
+        where: {
+          userId_partId: { userId, partId }
+        },
+        include: {
+          part: true,
+          shift: true
+        }
+      });
+    }
+    return this.prisma.pokaYokeDraft.findMany({
+      where: { userId },
+      include: {
+        part: true,
+        shift: true
+      },
+      orderBy: { updatedAt: 'desc' }
     });
   }
 

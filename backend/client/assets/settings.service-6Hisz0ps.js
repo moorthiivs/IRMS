@@ -1,0 +1,1 @@
+import{l as a}from"./index-Ccd99Ol1.js";const i={getAll:async()=>{const{data:t}=await a.get("/settings");return t},update:async(t,s)=>{const{data:e}=await a.put("/settings",{key:t,value:s});return e}};export{i as s};

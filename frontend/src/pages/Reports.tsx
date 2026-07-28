@@ -1379,7 +1379,9 @@ export function Reports() {
                 
                 {/* Middle section: Check sheet title and reference */}
                 <div className="w-[38%] p-3 border-r border-black flex flex-col justify-center items-center text-center">
-                  <Text size="lg" fw={900} className="text-black uppercase font-black tracking-wide leading-tight">Inspector - Inprocess Check Sheet</Text>
+                  <Text size="lg" fw={900} className="text-black uppercase font-black tracking-wide leading-tight">
+                    {settings.inspection_report_title || 'INSPECTOR - INPROCESS CHECK SHEET'}
+                  </Text>
                 </div>
 
                 {/* Right section: Part number, Part name, Operation number */}
@@ -1559,7 +1561,9 @@ export function Reports() {
                       </Table.Tr>
                     </Table.Tbody>
                   </Table>
-                  <Text size="xs" className="text-gray-500 font-medium mt-2 block text-left">TAF / P2 / 9.1B JAN-2012 (Rev date: 06.10.2023)</Text>
+                  <Text size="xs" className="text-gray-500 font-medium mt-2 block text-left">
+                    {settings.inspection_report_doc_number || 'TAF / P2 / 9.1B'} (Rev date: {settings.inspection_report_r_date || '06.10.2023'}) {settings.inspection_report_r_no ? `(R.No: ${settings.inspection_report_r_no})` : ''}
+                  </Text>
                 </div>
                 
                 <div style={{ width: '55%' }}>
