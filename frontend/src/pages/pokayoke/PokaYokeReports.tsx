@@ -2,15 +2,13 @@ import { useState, useRef } from 'react';
 import { Title, Paper, Group, Text, Select, Table, Badge, Center, Loader, Tabs, Button, ActionIcon, Collapse, Box, Checkbox, Modal, TextInput, Textarea, Autocomplete } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, X, FileText, LayoutList, ChevronDown, ChevronRight, CheckCircle2, Trash2, Wrench, Download } from 'lucide-react';
+import { Check, X, FileText, LayoutList, ChevronDown, ChevronRight, CheckCircle2, Trash2, Wrench, Download, Maximize2 } from 'lucide-react';
 import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
 import api from '../../lib/axios';
 import { masterDataService } from '../../services/master-data.service';
 import { settingsService } from '../../services/settings.service';
 import { format } from 'date-fns';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
 const commonUnits = ['mm', 'cm', 'm', 'kg', 'g', '°C', 'bar', 'psi', 'V', 'A', 'N', 'RPM', 'sec', 'min', 'pcs'];
 
@@ -305,44 +303,33 @@ export function PokaYokeReports() {
   const [activeTab, setActiveTab] = useState<string | null>('individual');
   const [selectedTxns, setSelectedTxns] = useState<string[]>([]);
   const reportRef = useRef<HTMLDivElement>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   const handleDownloadPdf = async () => {
-    if (!reportRef.current) return;
-    setIsDownloading(true);
+    if (!selectedPart || !dateRange[0]) return;
+    setIsDownloadingPdf(true);
     try {
-      const canvas = await html2canvas(reportRef.current, { scale: 2, useCORS: true, scrollX: 0, scrollY: 0, windowWidth: reportRef.current.scrollWidth });
-      const imgData = canvas.toDataURL('image/png');
-      
-      // A4 landscape dimensions in mm
-      const a4Width = 297;
-      const a4Height = 210;
-      const margin = 5;
-      const contentWidth = a4Width - margin * 2;
-      const contentHeight = a4Height - margin * 2;
-      
-      const imgAspect = canvas.width / canvas.height;
-      let drawWidth = contentWidth;
-      let drawHeight = contentWidth / imgAspect;
-      
-      // If image is taller than page, scale down
-      if (drawHeight > contentHeight) {
-        drawHeight = contentHeight;
-        drawWidth = contentHeight * imgAspect;
-      }
-      
-      const pdf = new jsPDF({
-        orientation: 'l',
-        unit: 'mm',
-        format: 'a4'
+      const startDate = format(dateRange[0], 'yyyy-MM-dd');
+      const endDate = dateRange[1] ? format(dateRange[1], 'yyyy-MM-dd') : startDate;
+
+      const response = await api.get('/pokayoke/report/pdf', {
+        params: { partId: selectedPart, startDate, endDate },
+        responseType: 'blob',
       });
-      
-      pdf.addImage(imgData, 'PNG', margin, margin, drawWidth, drawHeight);
-      pdf.save(`Pokayoke_Report.pdf`);
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `PokaYoke_Report_${startDate}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      notifications.show({ title: 'Success', message: 'Poka Yoke Report PDF generated via Puppeteer vector engine.', color: 'green' });
     } catch (err) {
-      notifications.show({ title: 'Error', message: 'Failed to generate PDF.', color: 'red' });
+      console.error('Failed to download Poka Yoke PDF:', err);
+      notifications.show({ title: 'Error', message: 'Failed to generate Puppeteer PDF report.', color: 'red' });
     } finally {
-      setIsDownloading(false);
+      setIsDownloadingPdf(false);
     }
   };
 
@@ -357,7 +344,8 @@ export function PokaYokeReports() {
   });
 
   const tpl = {
-    companyName: settings.report_company_name || 'SUNDRAM FASTENERS LTD., (AUTOLEC DIVISION PLANT-II) GUMMIDIPOONDI-601201',
+    companyName: settings.report_company_name !== undefined ? settings.report_company_name : '',
+    companySubtitle: settings.report_company_subtitle !== undefined ? settings.report_company_subtitle : '',
     title: settings.pokayoke_report_title || settings.report_title || 'POKA-YOKE INSPECTION REPORT',
     rNo: settings.pokayoke_report_r_no || settings.report_r_no || '03',
     rDate: settings.pokayoke_report_r_date || settings.report_r_date || '23.04.2023',
@@ -632,8 +620,20 @@ export function PokaYokeReports() {
               ) : reportData?.items?.length > 0 ? (
                 <div>
                   <Group justify="flex-end" mb="md">
-                    <Button leftSection={<Download size={16} />} loading={isDownloading} onClick={handleDownloadPdf}>
-                      Download PDF
+                    <Button
+                      leftSection={<Maximize2 size={16} />}
+                      variant="outline"
+                      color="blue"
+                      onClick={() => {
+                        const startDateStr = dateRange[0] ? format(dateRange[0], 'yyyy-MM-dd') : '';
+                        const endDateStr = dateRange[1] ? format(dateRange[1], 'yyyy-MM-dd') : startDateStr;
+                        window.open(`/pokayoke/reports/daily/preview?partId=${selectedPart}&startDate=${startDateStr}&endDate=${endDateStr}`, '_blank');
+                      }}
+                    >
+                      Full Window Preview
+                    </Button>
+                    <Button leftSection={<Download size={16} />} loading={isDownloadingPdf} onClick={handleDownloadPdf}>
+                      Download PDF Report
                     </Button>
                   </Group>
                   <div className="overflow-x-auto">
@@ -660,7 +660,8 @@ export function PokaYokeReports() {
                           )}
                         </Table.Th>
                         <Table.Th colSpan={4 + dateColumns.length} style={{ padding: '12px' }}>
-                          <Text fw={800} size="sm">{tpl.companyName}</Text>
+                          {tpl.companyName && <Text fw={800} size="sm">{tpl.companyName}</Text>}
+                          {tpl.companySubtitle && <Text fw={600} size="xs" c="dimmed" mt={2}>{tpl.companySubtitle}</Text>}
                           <Text fw={700} size="sm" mt={4}>{tpl.title}</Text>
                           <Text fw={700} size="sm" mt={4} style={{ textTransform: 'uppercase' }}>
                             PART NUMBER : {parts.find((p: any) => p.id === selectedPart)?.partNumber} {parts.find((p: any) => p.id === selectedPart)?.partName}

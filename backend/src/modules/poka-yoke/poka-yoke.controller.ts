@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, UseInterceptors, UploadedFile, Res } from '@nestjs/common';
+import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { PokaYokeService } from './poka-yoke.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -68,6 +69,24 @@ export class PokaYokeController {
     @Query('endDate') endDate: string,
   ) {
     return this.pokaYokeService.getReportData(req.user, partId, startDate, endDate);
+  }
+
+  @Get('report/pdf')
+  async downloadReportPdf(
+    @Request() req,
+    @Res() res: Response,
+    @Query('partId') partId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const pdfBuffer = await this.pokaYokeService.generatePokaYokePdf(req.user, partId, startDate, endDate);
+    const filename = `PokaYoke_Report_${startDate || 'Report'}.pdf`;
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': pdfBuffer.length,
+    });
+    res.end(pdfBuffer);
   }
 
   @Post('upload')

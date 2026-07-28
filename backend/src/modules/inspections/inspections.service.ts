@@ -3,10 +3,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ValidationStatus, TransactionStatus } from '@prisma/client';
 import { CreateInspectionDto } from './dto/create-inspection.dto';
 import { CorrectInspectionDto } from './dto/correct-inspection.dto';
+import { PdfService } from './pdf.service';
 
 @Injectable()
 export class InspectionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pdfService: PdfService,
+  ) {}
 
   async getDrafts(userId: string) {
     return this.prisma.inspectionDraft.findMany({
@@ -949,5 +953,32 @@ export class InspectionsService {
       dateLabels,
       parameters: parameterTrends,
     };
+  }
+
+  async generateDailyReportPdf(user: any, partId: string, operationId: string, mcNo?: string, dateStr?: string): Promise<Buffer> {
+    const transactions = await this.getDailyReport(user, partId, operationId, mcNo, dateStr);
+    
+    const part = await this.prisma.part.findUnique({ where: { id: partId } });
+    const operation = await this.prisma.operation.findUnique({ where: { id: operationId } });
+    const parameters = await this.prisma.inspectionParameter.findMany({
+      where: { partId, operationId },
+      orderBy: { sequence: 'asc' }
+    });
+    const shifts = await this.prisma.shift.findMany({ orderBy: { name: 'asc' } });
+    const settingsList = await this.prisma.systemSettings.findMany();
+    const settingsMap = settingsList.reduce((acc: any, curr: any) => ({ ...acc, [curr.key]: curr.value }), {});
+
+    const formattedDate = dateStr || new Date().toLocaleDateString();
+
+    return this.pdfService.generateDailyReportPdf(
+      settingsMap,
+      part,
+      operation,
+      mcNo || (transactions[0]?.mcNo) || 'N/A',
+      formattedDate,
+      parameters,
+      transactions,
+      shifts
+    );
   }
 }

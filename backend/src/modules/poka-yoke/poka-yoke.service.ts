@@ -1,11 +1,15 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PdfService } from '../inspections/pdf.service';
 import { TransactionStatus, ValidationStatus } from '@prisma/client';
 import * as xlsx from 'xlsx';
 
 @Injectable()
 export class PokaYokeService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private pdfService: PdfService
+  ) {}
 
   async getItemsByPart(partId: string) {
     return this.prisma.pokaYokeItem.findMany({
@@ -137,7 +141,10 @@ export class PokaYokeService {
       },
     });
 
+    const part = await this.prisma.part.findUnique({ where: { id: partId } });
+
     return {
+      part,
       items,
       transactions,
     };
@@ -440,5 +447,27 @@ export class PokaYokeService {
     return this.prisma.pokaYokeDraft.delete({
       where: { id },
     });
+  }
+
+  async generatePokaYokePdf(user: any, partId: string, startDate?: string, endDate?: string): Promise<Buffer> {
+    const sDate = startDate || new Date().toISOString().split('T')[0];
+    const eDate = endDate || sDate;
+    const reportData = await this.getReportData(user, partId, sDate, eDate);
+    const shifts = await this.prisma.shift.findMany({ orderBy: { name: 'asc' } });
+    const settingsList = await this.prisma.systemSettings.findMany();
+    const settingsMap = settingsList.reduce((acc: any, curr: any) => ({ ...acc, [curr.key]: curr.value }), {});
+
+    const dateStr = sDate === eDate ? sDate : `${sDate} to ${eDate}`;
+
+    return this.pdfService.generatePokaYokeReportPdf(
+      settingsMap,
+      reportData.part,
+      dateStr,
+      reportData.items || [],
+      reportData.transactions || [],
+      shifts,
+      sDate,
+      eDate
+    );
   }
 }
