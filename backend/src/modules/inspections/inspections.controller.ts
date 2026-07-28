@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Patch, Delete, Body, Query, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Query, Param, UseGuards, Request, Res } from '@nestjs/common';
+import { Response } from 'express';
 import { InspectionsService } from './inspections.service';
 import { CreateInspectionDto } from './dto/create-inspection.dto';
 import { CorrectInspectionDto } from './dto/correct-inspection.dto';
@@ -98,6 +99,25 @@ export class InspectionsController {
     @Query('date') date?: string,
   ) {
     return this.inspectionsService.getDailyReport(req.user, partId, operationId, mcNo, date);
+  }
+
+  @Get('daily/pdf')
+  async downloadDailyReportPdf(
+    @Request() req,
+    @Res() res: Response,
+    @Query('partId') partId: string,
+    @Query('operationId') operationId: string,
+    @Query('mcNo') mcNo?: string,
+    @Query('date') date?: string,
+  ) {
+    const pdfBuffer = await this.inspectionsService.generateDailyReportPdf(req.user, partId, operationId, mcNo, date);
+    const filename = `Inspector_Inprocess_Check_Sheet_${date || 'Report'}.pdf`;
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': pdfBuffer.length,
+    });
+    res.end(pdfBuffer);
   }
 
   @Get(':id')

@@ -35,7 +35,8 @@ export function Settings() {
   const [lotNumberRequired, setLotNumberRequired] = useState(true);
 
   // Shared Report Header State
-  const [reportCompanyName, setReportCompanyName] = useState('SUNDRAM FASTENERS LTD., (AUTOLEC DIVISION PLANT-II) GUMMIDIPOONDI-601201');
+  const [reportCompanyName, setReportCompanyName] = useState('');
+  const [reportCompanySubtitle, setReportCompanySubtitle] = useState('');
   const [reportLogo, setReportLogo] = useState<string | null>(null);
 
   // Inspection Report Header State
@@ -110,7 +111,8 @@ export function Settings() {
   useEffect(() => {
     setCascadeDelete(settings.deletion_policy === 'cascade');
     setLotNumberRequired(settings.lot_number_required !== 'false');
-    if (settings.report_company_name) setReportCompanyName(settings.report_company_name);
+    if (settings.report_company_name !== undefined) setReportCompanyName(settings.report_company_name);
+    if (settings.report_company_subtitle !== undefined) setReportCompanySubtitle(settings.report_company_subtitle);
     setReportLogo(settings.report_logo || null);
 
     // Inspection header settings
@@ -170,6 +172,7 @@ export function Settings() {
   const handleSaveReportTemplate = () => {
     Promise.all([
       updateMutation.mutateAsync({ key: 'report_company_name', value: reportCompanyName }),
+      updateMutation.mutateAsync({ key: 'report_company_subtitle', value: reportCompanySubtitle }),
       updateMutation.mutateAsync({ key: 'report_logo', value: reportLogo || '' }),
 
       // Save Inspection Report Header Settings
@@ -443,6 +446,14 @@ export function Settings() {
               description="Full company name displayed in the report header for both reports"
               value={reportCompanyName}
               onChange={(e) => setReportCompanyName(e.target.value)}
+            />
+
+            <TextInput
+              label="Company Subtitle / Division (Optional)"
+              description="Optional plant/division subtitle displayed below company name (e.g. AUTOLEC DIVISION PLANT-II)"
+              placeholder="(AUTOLEC DIVISION PLANT-II)"
+              value={reportCompanySubtitle}
+              onChange={(e) => setReportCompanySubtitle(e.target.value)}
             />
 
             <Tabs defaultValue="inspection" variant="outline" radius="md">

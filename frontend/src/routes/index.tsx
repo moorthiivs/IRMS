@@ -22,7 +22,8 @@ const NotFound = lazy(() => import('../pages/NotFound').then(m => ({ default: m.
 const PokaYokeEntry = lazy(() => import('../pages/pokayoke/PokaYokeEntry').then(m => ({ default: m.PokaYokeEntry })));
 const PokaYokeReports = lazy(() => import('../pages/pokayoke/PokaYokeReports').then(m => ({ default: m.PokaYokeReports })));
 const PokaYokeApprovals = lazy(() => import('../pages/pokayoke/PokaYokeApprovals').then(m => ({ default: m.PokaYokeApprovals })));
-
+const DailyReportFullView = lazy(() => import('../pages/DailyReportFullView').then(m => ({ default: m.DailyReportFullView })));
+const PokaYokeReportFullView = lazy(() => import('../pages/pokayoke/PokaYokeReportFullView').then(m => ({ default: m.PokaYokeReportFullView })));
 
 // Global Page Loader
 const PageLoader = () => (
@@ -63,6 +64,10 @@ export function AppRoutes() {
             )
           } 
         />
+
+        {/* Silent Standalone Page View Route for Full Check Sheet Preview (without sidebar layout) */}
+        <Route path="/reports/daily/preview" element={<ProtectedRoute><DailyReportFullView /></ProtectedRoute>} />
+        <Route path="/pokayoke/reports/daily/preview" element={<ProtectedRoute><PokaYokeReportFullView /></ProtectedRoute>} />
         
         <Route element={<DashboardLayout />}>
           {/* Admin Routes */}

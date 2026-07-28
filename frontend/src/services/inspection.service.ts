@@ -111,4 +111,19 @@ export const inspectionService = {
     const { data } = await api.get('/inspections/trends', { params });
     return data;
   },
+
+  downloadDailyPdf: async (params: { partId: string; operationId: string; mcNo?: string; date?: string }, filename: string) => {
+    const response = await api.get('/inspections/daily/pdf', {
+      params,
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
 };

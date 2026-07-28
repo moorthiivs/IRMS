@@ -1,12 +1,12 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { Title, Paper, Group, Button, Table, Text, Modal, Checkbox, Badge, TextInput, Textarea, Timeline, ThemeIcon, Autocomplete, Box } from '@mantine/core';
-import { Printer, ArrowLeft, FileCheck, Wrench, History, ArrowRight, Trash2 } from 'lucide-react';
+import { Printer, ArrowLeft, FileCheck, Wrench, History, ArrowRight, Trash2, Download } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { inspectionService } from '../services/inspection.service';
 import { settingsService } from '../services/settings.service';
 import { useAuthStore } from '../store/auth-store';
 import { notifications } from '@mantine/notifications';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { CorrectionEntry } from '../types';
 import { modals } from '@mantine/modals';
 
@@ -17,6 +17,9 @@ export function ReportPreview() {
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'ADMIN';
   const canApprove = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
+
+  const reportRef = useRef<HTMLDivElement>(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   const [approvalModalOpened, setApprovalModalOpened] = useState(false);
   const [reviewedChecked, setReviewedChecked] = useState(false);
@@ -147,6 +150,38 @@ export function ReportPreview() {
     window.print();
   };
 
+  const handleDownloadPdf = async () => {
+    if (!inspection) return;
+    setIsDownloadingPdf(true);
+    try {
+      const partStr = inspection.part?.partNumber || 'Part';
+      const dateStr = new Date(inspection.inspectionTimestamp).toISOString().split('T')[0];
+      await inspectionService.downloadDailyPdf(
+        {
+          partId: inspection.partId,
+          operationId: inspection.operationId,
+          mcNo: inspection.mcNo || undefined,
+          date: dateStr,
+        },
+        `CheckSheet_Report_${partStr}_${dateStr}.pdf`
+      );
+      notifications.show({
+        title: 'PDF Downloaded',
+        message: 'Inspection Report PDF generated via Puppeteer vector engine.',
+        color: 'green',
+      });
+    } catch (err) {
+      console.error('Failed to download PDF:', err);
+      notifications.show({
+        title: 'Download Error',
+        message: 'Failed to generate Puppeteer PDF report.',
+        color: 'red',
+      });
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   if (isLoading) return <div>Loading...</div>;
   if (!inspection) return <div>Not found</div>;
 
@@ -154,6 +189,38 @@ export function ReportPreview() {
 
   return (
     <div>
+      <style>{`
+        @media print {
+          @page {
+            size: A4 landscape;
+            margin: 5mm 6mm;
+          }
+          header, aside, nav, .print\\:hidden {
+            display: none !important;
+          }
+          html, body, #root, main {
+            padding: 0 !important;
+            margin: 0 !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+          }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+          }
+          tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          table, th, td {
+            border-color: #000000 !important;
+          }
+        }
+      `}</style>
       <Group justify="space-between" mb="lg" className="print:hidden">
         <Group>
           <Button variant="light" leftSection={<ArrowLeft size={16} />} onClick={() => navigate(-1)}>
@@ -205,15 +272,23 @@ export function ReportPreview() {
               Delete
             </Button>
           )}
-          <Button leftSection={<Printer size={16} />} onClick={handlePrint}>
+          <Button
+            color="indigo"
+            leftSection={<Download size={16} />}
+            loading={isDownloadingPdf}
+            onClick={handleDownloadPdf}
+          >
+            Download PDF
+          </Button>
+          <Button leftSection={<Printer size={16} />} onClick={handlePrint} color="teal">
             Print Checksheet
           </Button>
         </Group>
       </Group>
 
       {/* A4 Landscape Print Area */}
-      <Paper withBorder p="xl" className="print:border-0 print:p-0 bg-white dark:bg-[#1a1b1e] min-h-[500px] overflow-x-auto print:overflow-visible">
-        <div className="min-w-[800px] print:min-w-full">
+      <Paper withBorder p="xl" className="print:border-0 print:p-0 bg-white min-h-[500px] overflow-x-auto print:overflow-visible text-black">
+        <div ref={reportRef} className="min-w-[800px] print:min-w-full p-4 bg-white text-black">
           <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-3">
               <div className="h-12 w-[120px] flex items-center justify-center shrink-0">
