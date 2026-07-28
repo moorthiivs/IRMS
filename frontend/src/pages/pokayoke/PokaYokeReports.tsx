@@ -358,10 +358,10 @@ export function PokaYokeReports() {
 
   const tpl = {
     companyName: settings.report_company_name || 'SUNDRAM FASTENERS LTD., (AUTOLEC DIVISION PLANT-II) GUMMIDIPOONDI-601201',
-    title: settings.report_title || 'POKA-YOKE INSPECTION REPORT',
-    rNo: settings.report_r_no || '03',
-    rDate: settings.report_r_date || '23.04.2023',
-    docNumber: settings.report_doc_number || 'TAF/P2/9.4',
+    title: settings.pokayoke_report_title || settings.report_title || 'POKA-YOKE INSPECTION REPORT',
+    rNo: settings.pokayoke_report_r_no || settings.report_r_no || '03',
+    rDate: settings.pokayoke_report_r_date || settings.report_r_date || '23.04.2023',
+    docNumber: settings.pokayoke_report_doc_number || settings.report_doc_number || 'TAF/P2/9.4',
     logo: settings.report_logo || null,
   };
 

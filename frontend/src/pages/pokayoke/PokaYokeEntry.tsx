@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Title, Paper, Group, Text, Button, Select, Table, Badge, TextInput, Autocomplete } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
 import { Save, Check, X } from 'lucide-react';
@@ -13,6 +13,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../store/auth-store';
 
 export function PokaYokeEntry() {
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const queryPart = searchParams.get('partId');
   const { user } = useAuthStore();
@@ -37,7 +38,7 @@ export function PokaYokeEntry() {
   const userCustomerId = user?.customerId || selectedCustomer;
   const displayParts = userCustomerId
     ? parts.filter((p: any) => p.customerId === userCustomerId)
-    : [];
+    : parts;
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['pokayoke-items', selectedPart],
@@ -110,7 +111,16 @@ export function PokaYokeEntry() {
       const { data } = await api.post('/pokayoke/transaction', payload);
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      if (draftData?.id) {
+        try {
+          await api.delete(`/pokayoke/drafts/${draftData.id}`);
+        } catch (e) {
+          // ignore
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: ['pokayoke-draft', selectedPart] });
+      queryClient.invalidateQueries({ queryKey: ['pokayoke-all-drafts'] });
       notifications.show({
         title: 'Success',
         message: 'Poka Yoke readings saved successfully.',
@@ -147,6 +157,8 @@ export function PokaYokeEntry() {
       return data;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pokayoke-draft', selectedPart] });
+      queryClient.invalidateQueries({ queryKey: ['pokayoke-all-drafts'] });
       notifications.show({ title: 'Draft Saved', message: 'Your progress has been saved as a draft.', color: 'blue' });
     },
     onError: () => {

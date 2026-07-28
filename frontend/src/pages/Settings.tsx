@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   Title, Paper, Group, Text, Switch, Stack, Badge,
   Divider, Card, Alert, Loader, Button, SegmentedControl, useMantineColorScheme, useComputedColorScheme,
-  TextInput, Modal, Select
+  TextInput, Modal, Select, Tabs
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { Capacitor } from '@capacitor/core';
@@ -34,13 +34,21 @@ export function Settings() {
   const [cascadeDelete, setCascadeDelete] = useState(false);
   const [lotNumberRequired, setLotNumberRequired] = useState(true);
 
-  // Report template state
+  // Shared Report Header State
   const [reportCompanyName, setReportCompanyName] = useState('SUNDRAM FASTENERS LTD., (AUTOLEC DIVISION PLANT-II) GUMMIDIPOONDI-601201');
-  const [reportTitle, setReportTitle] = useState('POKA-YOKE INSPECTION REPORT');
-  const [reportRNo, setReportRNo] = useState('03');
-  const [reportRDate, setReportRDate] = useState('23.04.2023');
-  const [reportDocNumber, setReportDocNumber] = useState('TAF/P2/9.4');
   const [reportLogo, setReportLogo] = useState<string | null>(null);
+
+  // Inspection Report Header State
+  const [inspectionReportTitle, setInspectionReportTitle] = useState('INSPECTOR - INPROCESS CHECK SHEET');
+  const [inspectionReportRNo, setInspectionReportRNo] = useState('01');
+  const [inspectionReportRDate, setInspectionReportRDate] = useState('06.10.2023');
+  const [inspectionReportDocNumber, setInspectionReportDocNumber] = useState('TAF / P2 / 9.1B');
+
+  // Poka-Yoke Report Header State
+  const [pokayokeReportTitle, setPokayokeReportTitle] = useState('POKA-YOKE INSPECTION REPORT');
+  const [pokayokeReportRNo, setPokayokeReportRNo] = useState('03');
+  const [pokayokeReportRDate, setPokayokeReportRDate] = useState('23.04.2023');
+  const [pokayokeReportDocNumber, setPokayokeReportDocNumber] = useState('TAF/P2/9.4');
 
   // SMTP Settings state
   const [smtpHost, setSmtpHost] = useState('');
@@ -103,11 +111,20 @@ export function Settings() {
     setCascadeDelete(settings.deletion_policy === 'cascade');
     setLotNumberRequired(settings.lot_number_required !== 'false');
     if (settings.report_company_name) setReportCompanyName(settings.report_company_name);
-    if (settings.report_title) setReportTitle(settings.report_title);
-    if (settings.report_r_no) setReportRNo(settings.report_r_no);
-    if (settings.report_r_date) setReportRDate(settings.report_r_date);
-    if (settings.report_doc_number) setReportDocNumber(settings.report_doc_number);
     setReportLogo(settings.report_logo || null);
+
+    // Inspection header settings
+    setInspectionReportTitle(settings.inspection_report_title || settings.report_title || 'INSPECTOR - INPROCESS CHECK SHEET');
+    setInspectionReportRNo(settings.inspection_report_r_no || settings.report_r_no || '01');
+    setInspectionReportRDate(settings.inspection_report_r_date || settings.report_r_date || '06.10.2023');
+    setInspectionReportDocNumber(settings.inspection_report_doc_number || settings.report_doc_number || 'TAF / P2 / 9.1B');
+
+    // Poka-Yoke header settings
+    setPokayokeReportTitle(settings.pokayoke_report_title || settings.report_title || 'POKA-YOKE INSPECTION REPORT');
+    setPokayokeReportRNo(settings.pokayoke_report_r_no || settings.report_r_no || '03');
+    setPokayokeReportRDate(settings.pokayoke_report_r_date || settings.report_r_date || '23.04.2023');
+    setPokayokeReportDocNumber(settings.pokayoke_report_doc_number || settings.report_doc_number || 'TAF/P2/9.4');
+
     if (settings.smtp_host) setSmtpHost(settings.smtp_host);
     if (settings.smtp_port) setSmtpPort(settings.smtp_port);
     if (settings.smtp_user) setSmtpUser(settings.smtp_user);
@@ -153,13 +170,27 @@ export function Settings() {
   const handleSaveReportTemplate = () => {
     Promise.all([
       updateMutation.mutateAsync({ key: 'report_company_name', value: reportCompanyName }),
-      updateMutation.mutateAsync({ key: 'report_title', value: reportTitle }),
-      updateMutation.mutateAsync({ key: 'report_r_no', value: reportRNo }),
-      updateMutation.mutateAsync({ key: 'report_r_date', value: reportRDate }),
-      updateMutation.mutateAsync({ key: 'report_doc_number', value: reportDocNumber }),
       updateMutation.mutateAsync({ key: 'report_logo', value: reportLogo || '' }),
+
+      // Save Inspection Report Header Settings
+      updateMutation.mutateAsync({ key: 'inspection_report_title', value: inspectionReportTitle }),
+      updateMutation.mutateAsync({ key: 'inspection_report_r_no', value: inspectionReportRNo }),
+      updateMutation.mutateAsync({ key: 'inspection_report_r_date', value: inspectionReportRDate }),
+      updateMutation.mutateAsync({ key: 'inspection_report_doc_number', value: inspectionReportDocNumber }),
+
+      // Save Poka-Yoke Report Header Settings
+      updateMutation.mutateAsync({ key: 'pokayoke_report_title', value: pokayokeReportTitle }),
+      updateMutation.mutateAsync({ key: 'pokayoke_report_r_no', value: pokayokeReportRNo }),
+      updateMutation.mutateAsync({ key: 'pokayoke_report_r_date', value: pokayokeReportRDate }),
+      updateMutation.mutateAsync({ key: 'pokayoke_report_doc_number', value: pokayokeReportDocNumber }),
+
+      // Keep legacy keys updated for fallback compatibility
+      updateMutation.mutateAsync({ key: 'report_title', value: pokayokeReportTitle }),
+      updateMutation.mutateAsync({ key: 'report_r_no', value: pokayokeReportRNo }),
+      updateMutation.mutateAsync({ key: 'report_r_date', value: pokayokeReportRDate }),
+      updateMutation.mutateAsync({ key: 'report_doc_number', value: pokayokeReportDocNumber }),
     ]).then(() => {
-      notifications.show({ title: 'Report Template Saved', message: 'All report template settings saved successfully.', color: 'green' });
+      notifications.show({ title: 'Report Template Saved', message: 'Inspection and Poka-Yoke template settings saved successfully.', color: 'green' });
     }).catch(() => {
       // Error is handled by individual mutation
     });
@@ -394,51 +425,99 @@ export function Settings() {
           <Group mb="md" gap="sm">
             <FileText size={20} />
             <Text fw={600} size="lg">
-              Report Template
+              Report Template Settings
             </Text>
           </Group>
 
           <Divider mb="md" />
 
           <Text size="sm" c="dimmed" mb="md">
-            Edit the header and footer values used in the Poka-Yoke daily report template. Changes are reflected immediately in the report.
+            Configure header logo, company name, and separate header/control text for Inspection Reports and Poka-Yoke Reports.
           </Text>
 
-          <Stack gap="sm">
+          <Stack gap="md">
             <ReportLogoUploader value={reportLogo} onChange={setReportLogo} />
-            <Divider my="xs" label="Report Header Text Settings" labelPosition="center" />
+            
             <TextInput
               label="Company Name"
-              description="Full company name displayed in the report header"
+              description="Full company name displayed in the report header for both reports"
               value={reportCompanyName}
               onChange={(e) => setReportCompanyName(e.target.value)}
             />
-            <TextInput
-              label="Report Title"
-              description="Title displayed below the company name"
-              value={reportTitle}
-              onChange={(e) => setReportTitle(e.target.value)}
-            />
-            <Group grow>
-              <TextInput
-                label="R.No"
-                description="Revision number"
-                value={reportRNo}
-                onChange={(e) => setReportRNo(e.target.value)}
-              />
-              <TextInput
-                label="R.Date"
-                description="Revision date"
-                value={reportRDate}
-                onChange={(e) => setReportRDate(e.target.value)}
-              />
-              <TextInput
-                label="Document Control Number"
-                description="e.g. TAF/P2/9.4"
-                value={reportDocNumber}
-                onChange={(e) => setReportDocNumber(e.target.value)}
-              />
-            </Group>
+
+            <Tabs defaultValue="inspection" variant="outline" radius="md">
+              <Tabs.List mb="md">
+                <Tabs.Tab value="inspection">
+                  Inspection Report Header
+                </Tabs.Tab>
+                <Tabs.Tab value="pokayoke">
+                  Poka-Yoke Report Header
+                </Tabs.Tab>
+              </Tabs.List>
+
+              <Tabs.Panel value="inspection">
+                <Stack gap="sm">
+                  <TextInput
+                    label="Inspection Report Title"
+                    description="Title displayed on Inspection Reports"
+                    value={inspectionReportTitle}
+                    onChange={(e) => setInspectionReportTitle(e.target.value)}
+                  />
+                  <Group grow>
+                    <TextInput
+                      label="R.No"
+                      description="Revision number"
+                      value={inspectionReportRNo}
+                      onChange={(e) => setInspectionReportRNo(e.target.value)}
+                    />
+                    <TextInput
+                      label="R.Date"
+                      description="Revision date"
+                      value={inspectionReportRDate}
+                      onChange={(e) => setInspectionReportRDate(e.target.value)}
+                    />
+                    <TextInput
+                      label="Document Control Number"
+                      description="e.g. TAF / P2 / 9.1B"
+                      value={inspectionReportDocNumber}
+                      onChange={(e) => setInspectionReportDocNumber(e.target.value)}
+                    />
+                  </Group>
+                </Stack>
+              </Tabs.Panel>
+
+              <Tabs.Panel value="pokayoke">
+                <Stack gap="sm">
+                  <TextInput
+                    label="Poka-Yoke Report Title"
+                    description="Title displayed on Poka-Yoke Reports"
+                    value={pokayokeReportTitle}
+                    onChange={(e) => setPokayokeReportTitle(e.target.value)}
+                  />
+                  <Group grow>
+                    <TextInput
+                      label="R.No"
+                      description="Revision number"
+                      value={pokayokeReportRNo}
+                      onChange={(e) => setPokayokeReportRNo(e.target.value)}
+                    />
+                    <TextInput
+                      label="R.Date"
+                      description="Revision date"
+                      value={pokayokeReportRDate}
+                      onChange={(e) => setPokayokeReportRDate(e.target.value)}
+                    />
+                    <TextInput
+                      label="Document Control Number"
+                      description="e.g. TAF/P2/9.4"
+                      value={pokayokeReportDocNumber}
+                      onChange={(e) => setPokayokeReportDocNumber(e.target.value)}
+                    />
+                  </Group>
+                </Stack>
+              </Tabs.Panel>
+            </Tabs>
+
             <Group justify="flex-end" mt="md">
               <Button onClick={handleSaveReportTemplate} loading={updateMutation.isPending}>
                 Save Template Settings
