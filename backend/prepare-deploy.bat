@@ -3,7 +3,7 @@ echo Building the application...
 call npm run build:all
 
 echo Creating deployment zip file (this may take a moment)...
-powershell -Command "Compress-Archive -Path .\dist, .\client, .\prisma, .\package.json, .\package-lock.json, .\tsconfig.json, .\tsconfig.build.json -DestinationPath deploy.zip -Force"
+powershell -Command "Compress-Archive -Path .\dist, .\client, .\prisma, .\node_modules, .\package.json, .\package-lock.json, .\.puppeteerrc.cjs, .\tsconfig.json, .\tsconfig.build.json -DestinationPath deploy.zip -Force"
 
 echo.
 echo ========================================================
