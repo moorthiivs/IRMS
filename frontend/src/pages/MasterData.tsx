@@ -406,7 +406,7 @@ function PartRow({
   onEditAllPokaYokeItems,
 }: {
   part: PartWithOperations & { pokaYokeItems?: any[] };
-  appMode: 'INSPECTION' | 'POKAYOKE';
+  appMode: 'INSPECTION' | 'POKAYOKE' | 'SPC';
   expanded: boolean;
   onToggle: () => void;
   onEditPart: () => void;

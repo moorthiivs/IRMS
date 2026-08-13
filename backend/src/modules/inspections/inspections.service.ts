@@ -220,6 +220,110 @@ export class InspectionsService {
     return transaction;
   }
 
+  // ── Calendar Data ─────────────────────────────────────────────────
+  async getCalendarData(
+    user: any,
+    startDate: string,
+    endDate: string,
+    customerId?: string,
+    partId?: string,
+    operationId?: string,
+  ) {
+    const where: any = {};
+
+    // Role-based filtering
+    if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR' || user.role === 'INSPECTOR') && user.customerId) {
+      where.customerId = user.customerId;
+    }
+
+    // Date range filter
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+    where.inspectionTimestamp = { gte: start, lte: end };
+
+    if (customerId) {
+      where.customerId = customerId;
+    }
+    if (partId) {
+      where.partId = partId;
+    }
+    if (operationId) {
+      where.operationId = operationId;
+    }
+
+    const transactions = await this.prisma.inspectionTransaction.findMany({
+      where,
+      include: {
+        part: { select: { partNumber: true, partName: true } },
+        operation: { select: { operationNumber: true, operationName: true } },
+        shift: { select: { id: true, name: true } },
+        inspector: { select: { name: true } },
+      },
+      orderBy: { inspectionTimestamp: 'asc' },
+    });
+
+    // Group by date string (YYYY-MM-DD)
+    const dateMap: Record<string, {
+      date: string;
+      totalReports: number;
+      passedCount: number;
+      rejectedCount: number;
+      approvedCount: number;
+      pendingApprovalCount: number;
+      shifts: Record<string, { shiftName: string; reportCount: number; passedCount: number; rejectedCount: number }>;
+    }> = {};
+
+    for (const tx of transactions) {
+      const dateKey = tx.inspectionTimestamp
+        ? new Date(tx.inspectionTimestamp).toISOString().slice(0, 10)
+        : 'unknown';
+
+      if (!dateMap[dateKey]) {
+        dateMap[dateKey] = {
+          date: dateKey,
+          totalReports: 0,
+          passedCount: 0,
+          rejectedCount: 0,
+          approvedCount: 0,
+          pendingApprovalCount: 0,
+          shifts: {},
+        };
+      }
+
+      const day = dateMap[dateKey];
+      day.totalReports++;
+
+      if (tx.status === 'PASSED') day.passedCount++;
+      if (tx.status === 'REJECTED') day.rejectedCount++;
+      if (tx.approvedById) {
+        day.approvedCount++;
+      } else {
+        day.pendingApprovalCount++;
+      }
+
+      // Group by shift
+      const shiftName = (tx.shift as any)?.name || 'Unknown';
+      const shiftId = (tx.shift as any)?.id || 'unknown';
+      if (!day.shifts[shiftId]) {
+        day.shifts[shiftId] = { shiftName, reportCount: 0, passedCount: 0, rejectedCount: 0 };
+      }
+      day.shifts[shiftId].reportCount++;
+      if (tx.status === 'PASSED') day.shifts[shiftId].passedCount++;
+      if (tx.status === 'REJECTED') day.shifts[shiftId].rejectedCount++;
+    }
+
+    // Convert shifts map to array
+    const calendarDays = Object.values(dateMap).map((day) => ({
+      ...day,
+      shifts: Object.values(day.shifts),
+      allComplete: day.rejectedCount === 0 && day.totalReports > 0,
+    }));
+
+    return calendarDays;
+  }
+
   async getRecentInspections(user: any, status?: string, approval?: string, dateStr?: string, shiftId?: string, partId?: string, operationId?: string, hasMc?: string) {
     const where: any = {};
     if (user && (user.role === 'SUPERVISOR' || user.role === 'OPERATOR' || user.role === 'INSPECTOR') && user.customerId) {

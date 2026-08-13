@@ -52,12 +52,18 @@ export function DashboardLayout() {
               ml="md"
               value={appMode}
               onChange={(val) => {
-                setAppMode(val as 'INSPECTION' | 'POKAYOKE');
-                navigate('/dashboard'); // Navigate to a common starting point
+                const newMode = val as 'INSPECTION' | 'POKAYOKE' | 'SPC';
+                setAppMode(newMode);
+                if (newMode === 'SPC') {
+                  navigate('/spc/dashboard');
+                } else {
+                  navigate('/dashboard');
+                }
               }}
               data={[
                 { label: 'Inspection', value: 'INSPECTION' },
                 { label: 'Poka Yoke', value: 'POKAYOKE' },
+                { label: 'SPC', value: 'SPC' },
               ]}
               className="hidden md:flex"
             />

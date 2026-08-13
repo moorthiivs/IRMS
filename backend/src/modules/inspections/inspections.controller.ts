@@ -43,6 +43,18 @@ export class InspectionsController {
     return this.inspectionsService.createInspection(req.user.id, dto);
   }
 
+  @Get('calendar')
+  async getCalendarData(
+    @Request() req,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Query('customerId') customerId?: string,
+    @Query('partId') partId?: string,
+    @Query('operationId') operationId?: string,
+  ) {
+    return this.inspectionsService.getCalendarData(req.user, startDate, endDate, customerId, partId, operationId);
+  }
+
   @Get('dashboard')
   async getDashboard(
     @Request() req,

@@ -18,16 +18,20 @@ export class MasterDataService {
       where,
       orderBy: { name: 'asc' },
       include: {
+        parts: { select: { id: true, partNumber: true, partName: true } },
+        spcCharacteristics: { select: { id: true, partNumber: true } },
         _count: { select: { parts: true } },
       },
     });
 
     const now = new Date();
     return customers.map(c => {
+      const spcPartNumbers = Array.from(new Set((c.spcCharacteristics || []).map((sc: any) => sc.partNumber)));
+      const partCount = Math.max(c._count?.parts || 0, c.parts?.length || 0, spcPartNumbers.length);
+
       let activeMachines = c.activeMachines;
       if (c.activeMachinesDate) {
          const d = new Date(c.activeMachinesDate);
-         // Calculate next 9 AM after 'd'
          let resetTime = new Date(d);
          resetTime.setHours(9, 0, 0, 0);
          if (d.getHours() >= 9) {
@@ -38,9 +42,9 @@ export class MasterDataService {
             activeMachines = []; // Expired
          }
       } else {
-         activeMachines = []; // If no date is set, default to empty
+         activeMachines = [];
       }
-      return { ...c, activeMachines };
+      return { ...c, partCount, activeMachines };
     });
   }
 

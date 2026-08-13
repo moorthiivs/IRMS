@@ -50,6 +50,9 @@ model User {
   corrections  CorrectionEntry[]       @relation("CorrectedBy")
   pokaYokeTransactions PokaYokeTransaction[] @relation("PokaYokeInspector")
   pokaYokeApprovals    PokaYokeTransaction[] @relation("PokaYokeAdmin")
+  spcDrafts            SpcDraft[]
+  spcTransactions      SpcTransaction[]      @relation("SpcInspector")
+  spcApprovals         SpcTransaction[]      @relation("SpcAdmin")
 }
 
 model Shift {
@@ -60,6 +63,8 @@ model Shift {
   transactions InspectionTransaction[]
   pokaYokeTransactions PokaYokeTransaction[]
   pokaYokeDrafts       PokaYokeDraft[]
+  spcTransactions      SpcTransaction[]
+  spcDrafts            SpcDraft[]
 }
 
 model Customer {
@@ -75,6 +80,8 @@ model Customer {
   users     User[]
   inspectionTransactions InspectionTransaction[]
   pokaYokeTransactions   PokaYokeTransaction[]
+  spcTransactions        SpcTransaction[]
+  spcCharacteristics     SpcCharacteristic[]
 }
 
 model Part {
@@ -90,6 +97,9 @@ model Part {
   pokaYokeDrafts PokaYokeDraft[]
   pokaYokeItems PokaYokeItem[]
   pokaYokeTransactions PokaYokeTransaction[]
+  spcDrafts SpcDraft[]
+  spcTransactions SpcTransaction[]
+  spcData SpcData[]
 }
 
 model Operation {
@@ -100,6 +110,8 @@ model Operation {
   parameters      InspectionParameter[]
   transactions    InspectionTransaction[]
   drafts          InspectionDraft[]
+  spcTransactions SpcTransaction[]
+  spcDrafts       SpcDraft[]
 }
 
 model PartOperation {
@@ -132,6 +144,7 @@ model InspectionParameter {
   part                Part               @relation(fields: [partId], references: [id], onDelete: Cascade)
   operation           Operation          @relation(fields: [operationId], references: [id], onDelete: Cascade)
   details             InspectionDetail[]
+  spcDetails          SpcDetail[]
 
   @@unique([partId, operationId, parameterName])
 }
@@ -294,3 +307,94 @@ model PokaYokeDraft {
 
   @@unique([userId, partId])
 }
+
+model SpcTransaction {
+  id                  String             @id @default(uuid())
+  inspectorId         String
+  shiftId             String?
+  partId              String
+  operationId         String
+  lotNumber           String?
+  mcNo                String?
+  intervalName        String
+  inspectionTimestamp DateTime           @default(now())
+  status              TransactionStatus
+  remarks             String?
+  approvedById        String?
+  approvedAt          DateTime?
+  customerId          String?
+  customer            Customer?          @relation(fields: [customerId], references: [id])
+  inspector           User               @relation("SpcInspector", fields: [inspectorId], references: [id])
+  approvedBy          User?              @relation("SpcAdmin", fields: [approvedById], references: [id])
+  shift               Shift?             @relation(fields: [shiftId], references: [id])
+  part                Part               @relation(fields: [partId], references: [id])
+  operation           Operation          @relation(fields: [operationId], references: [id])
+  details             SpcDetail[]
+}
+
+model SpcDetail {
+  id            String         @id @default(uuid())
+  transactionId String
+  parameterId   String
+  observedValue String
+  status        ValidationStatus
+  transaction   SpcTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  parameter     InspectionParameter @relation(fields: [parameterId], references: [id])
+}
+
+model SpcDraft {
+  id              String   @id @default(uuid())
+  userId          String
+  partId          String
+  operationId     String
+  shiftId         String?
+  intervalName    String?
+  mcNo            String?
+  lotNumber       String?
+  remarks         String?
+  readingsData    String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User      @relation(fields: [userId], references: [id])
+  part            Part      @relation(fields: [partId], references: [id])
+  operation       Operation @relation(fields: [operationId], references: [id])
+  shift           Shift?    @relation(fields: [shiftId], references: [id])
+
+  @@unique([userId, partId, operationId])
+}
+
+model SpcData {
+  id            String   @id @default(uuid())
+  partNumber    String
+  part          Part     @relation(fields: [partNumber], references: [partNumber], onDelete: Cascade)
+  parameterName String
+  subgroupSize  Int      @default(5)
+  usl           Float?
+  lsl           Float?
+  target        Float?
+  sampleValues  String   // JSON array string of numeric readings
+  batchLot      String?
+  timestamp     DateTime @default(now())
+  createdAt     DateTime @default(now())
+}
+
+model SpcCharacteristic {
+  id                    String   @id @default(uuid())
+  productDescription    String?
+  partNumber            String
+  machineNumber         String?
+  qualityCharacteristic String
+  usl                   Float?
+  lsl                   Float?
+  frequency             String?  // e.g., "1/shift", "2/shift", "4/shift", "1/day", "2/day"
+  subgroupSize          Int      @default(5)
+  customerId            String?
+  customer              Customer? @relation(fields: [customerId], references: [id])
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([partNumber, machineNumber, qualityCharacteristic])
+}
+
+

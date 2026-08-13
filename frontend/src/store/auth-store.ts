@@ -7,11 +7,11 @@ interface AuthState {
   user: User | null;
   activeShift?: { id: string; name: string } | null;
   machineNumber?: string | null;
-  appMode: 'INSPECTION' | 'POKAYOKE';
+  appMode: 'INSPECTION' | 'POKAYOKE' | 'SPC';
   selectedCustomerId: string | null;
   setAuth: (token: string, user: User) => void;
   logout: () => void;
-  setAppMode: (mode: 'INSPECTION' | 'POKAYOKE') => void;
+  setAppMode: (mode: 'INSPECTION' | 'POKAYOKE' | 'SPC') => void;
   setSelectedCustomerId: (id: string | null) => void;
 }
 

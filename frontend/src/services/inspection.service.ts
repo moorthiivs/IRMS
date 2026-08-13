@@ -34,6 +34,11 @@ export const inspectionService = {
     return data;
   },
 
+  getCalendarData: async (params: { startDate: string; endDate: string; customerId?: string; partId?: string; operationId?: string }) => {
+    const { data } = await api.get('/inspections/calendar', { params });
+    return data;
+  },
+
   getDashboardData: async (filters?: { customerId?: string | null; startDate?: string | null; endDate?: string | null }) => {
     const params: any = {};
     if (filters?.customerId) params.customerId = filters.customerId;

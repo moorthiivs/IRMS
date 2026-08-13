@@ -9,7 +9,8 @@ import {
   Users,
   Save,
   Building2,
-  Cpu
+  Cpu,
+  CalendarDays
 } from 'lucide-react';
 import { useAuthStore } from '../../store/auth-store';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -45,6 +46,7 @@ export function Sidebar({ onClose }: SidebarProps) {
     { icon: ClipboardCheck, label: 'Quality Control', to: '/inspection' },
     { icon: Save, label: 'Work in Progress', to: '/drafts' },
     { icon: FileText, label: 'Analytics & Reports', to: '/reports' },
+    { icon: CalendarDays, label: 'Calendar', to: '/calendar' },
   ];
 
   const pokaYokeLinks = [
@@ -52,6 +54,15 @@ export function Sidebar({ onClose }: SidebarProps) {
     { icon: ClipboardCheck, label: 'Poka-Yoke Operations', to: '/pokayoke/entry' },
     { icon: Save, label: 'Work in Progress', to: '/drafts' },
     { icon: FileText, label: 'Poka-Yoke Analytics', to: '/pokayoke/reports' },
+  ];
+
+  const spcLinks = [
+    { icon: LayoutDashboard, label: 'SPC Dashboard', to: '/spc/dashboard' },
+    { icon: ClipboardCheck, label: 'SPC Entry', to: '/spc/entry' },
+    { icon: Save, label: 'Saved SPC Drafts', to: '/spc/drafts' },
+    { icon: FileText, label: 'Individual Report', to: '/spc/reports' },
+    { icon: Building2, label: 'Customers', to: '/spc/customers' },
+    { icon: Database, label: 'Master Data Management', to: '/spc/master-data' },
   ];
 
   const adminLinks = [];
@@ -66,10 +77,11 @@ export function Sidebar({ onClose }: SidebarProps) {
     adminLinks.push({ icon: Settings, label: 'System Configuration', to: '/settings' });
   }
 
-  const links = [
-    ...(appMode === 'POKAYOKE' ? pokaYokeLinks : inspectionLinks),
-    ...adminLinks,
-  ];
+  const links = appMode === 'SPC' 
+    ? spcLinks 
+    : appMode === 'POKAYOKE' 
+      ? [...pokaYokeLinks, ...adminLinks] 
+      : [...inspectionLinks, ...adminLinks];
 
   const navigate = useNavigate();
 
@@ -78,13 +90,19 @@ export function Sidebar({ onClose }: SidebarProps) {
       <SegmentedControl
         value={appMode}
         onChange={(val) => {
-          setAppMode(val as 'INSPECTION' | 'POKAYOKE');
-          navigate('/dashboard');
+          const newMode = val as 'INSPECTION' | 'POKAYOKE' | 'SPC';
+          setAppMode(newMode);
+          if (newMode === 'SPC') {
+            navigate('/spc/entry');
+          } else {
+            navigate('/dashboard');
+          }
           if (onClose) onClose();
         }}
         data={[
           { label: 'Inspection', value: 'INSPECTION' },
           { label: 'Poka Yoke', value: 'POKAYOKE' },
+          { label: 'SPC', value: 'SPC' },
         ]}
         className="md:hidden mb-2"
         fullWidth

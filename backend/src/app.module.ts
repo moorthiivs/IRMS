@@ -7,6 +7,7 @@ import { UsersModule } from './modules/users/users.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { PokaYokeModule } from './modules/poka-yoke/poka-yoke.module';
 import { NotificationModule } from './modules/notifications/notification.module';
+import { SpcModule } from './modules/spc/spc.module';
 
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
@@ -25,6 +26,7 @@ import { join } from 'path';
     SettingsModule,
     PokaYokeModule,
     NotificationModule,
+    SpcModule,
   ],
 })
 export class AppModule {}

@@ -24,6 +24,15 @@ const PokaYokeReports = lazy(() => import('../pages/pokayoke/PokaYokeReports').t
 const PokaYokeApprovals = lazy(() => import('../pages/pokayoke/PokaYokeApprovals').then(m => ({ default: m.PokaYokeApprovals })));
 const DailyReportFullView = lazy(() => import('../pages/DailyReportFullView').then(m => ({ default: m.DailyReportFullView })));
 const PokaYokeReportFullView = lazy(() => import('../pages/pokayoke/PokaYokeReportFullView').then(m => ({ default: m.PokaYokeReportFullView })));
+const InspectionCalendar = lazy(() => import('../pages/InspectionCalendar').then(m => ({ default: m.InspectionCalendar })));
+
+// SPC Pages
+const SpcDashboard = lazy(() => import('../pages/spc/SpcDashboard').then(m => ({ default: m.SpcDashboard })));
+const SpcEntry = lazy(() => import('../pages/spc/SpcEntry').then(m => ({ default: m.SpcEntry })));
+const SpcDrafts = lazy(() => import('../pages/spc/SpcDrafts').then(m => ({ default: m.SpcDrafts })));
+const SpcIndividualReport = lazy(() => import('../pages/spc/SpcIndividualReport').then(m => ({ default: m.SpcIndividualReport })));
+const SpcCustomers = lazy(() => import('../pages/spc/SpcCustomers').then(m => ({ default: m.SpcCustomers })));
+const SpcMasterData = lazy(() => import('../pages/spc/SpcMasterData').then(m => ({ default: m.SpcMasterData })));
 
 // Global Page Loader
 const PageLoader = () => (
@@ -84,11 +93,20 @@ export function AppRoutes() {
           <Route path="/drafts" element={<ProtectedRoute><Drafts /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/reports/:id" element={<ProtectedRoute><ReportPreview /></ProtectedRoute>} />
+          <Route path="/calendar" element={<ProtectedRoute><InspectionCalendar /></ProtectedRoute>} />
           
           {/* Poka Yoke Routes */}
           <Route path="/pokayoke/entry" element={<ProtectedRoute><PokaYokeEntry /></ProtectedRoute>} />
           <Route path="/pokayoke/reports" element={<ProtectedRoute><PokaYokeReports /></ProtectedRoute>} />
           <Route path="/pokayoke/approvals" element={<ProtectedRoute><PokaYokeApprovals /></ProtectedRoute>} />
+
+          {/* SPC Routes */}
+          <Route path="/spc/dashboard" element={<ProtectedRoute><SpcDashboard /></ProtectedRoute>} />
+          <Route path="/spc/entry" element={<ProtectedRoute><SpcEntry /></ProtectedRoute>} />
+          <Route path="/spc/drafts" element={<ProtectedRoute><SpcDrafts /></ProtectedRoute>} />
+          <Route path="/spc/reports" element={<ProtectedRoute><SpcIndividualReport /></ProtectedRoute>} />
+          <Route path="/spc/customers" element={<ProtectedRoute><SpcCustomers /></ProtectedRoute>} />
+          <Route path="/spc/master-data" element={<ProtectedRoute><SpcMasterData /></ProtectedRoute>} />
         </Route>
 
         <Route path="/" element={<Navigate to="/login" replace />} />
