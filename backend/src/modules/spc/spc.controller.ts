@@ -18,6 +18,23 @@ export class SpcController {
     return this.spcService.getDashboardData(req.user, { customerId, partNumber, machineNumber });
   }
 
+  @Get('monthly-status')
+  async getMonthlyStatus(
+    @Query('year') year: string,
+    @Query('month') month: string,
+    @Query('partId') partId: string,
+    @Query('operationId') operationId: string,
+    @Query('mcNo') mcNo: string,
+  ) {
+    return this.spcService.getMonthlyStatus(
+      parseInt(year, 10),
+      parseInt(month, 10),
+      partId,
+      operationId,
+      mcNo,
+    );
+  }
+
   @Post('characteristics/upload')
   async uploadCharacteristics(@Body() body: { records: any[] }) {
     return this.spcService.uploadCharacteristics(body.records);

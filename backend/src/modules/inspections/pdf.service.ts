@@ -41,6 +41,33 @@ export class PdfService {
     return '';
   }
 
+  private getBrowserLaunchOptions(): any {
+    const options: any = {
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    };
+
+    const possibleExecutablePaths = [
+      process.env.PUPPETEER_EXECUTABLE_PATH,
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+      'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+      '/usr/bin/google-chrome',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium',
+    ].filter(Boolean) as string[];
+
+    for (const execPath of possibleExecutablePaths) {
+      if (fs.existsSync(execPath)) {
+        options.executablePath = execPath;
+        break;
+      }
+    }
+
+    return options;
+  }
+
   /**
    * Generates a 100% vector-crisp A4 Landscape PDF Check Sheet using Puppeteer (Headless Chromium).
    * Exact match to sample.pdf format: Abbreviations & Remarks integrated directly inside table rows on a single page.
@@ -66,10 +93,7 @@ export class PdfService {
       shifts
     );
 
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    });
+    const browser = await puppeteer.launch(this.getBrowserLaunchOptions());
 
     try {
       const page = await browser.newPage();
@@ -540,10 +564,7 @@ export class PdfService {
       endDate
     );
 
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    });
+    const browser = await puppeteer.launch(this.getBrowserLaunchOptions());
 
     try {
       const page = await browser.newPage();

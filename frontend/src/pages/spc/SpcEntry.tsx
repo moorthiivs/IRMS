@@ -11,7 +11,10 @@ import { notifications } from '@mantine/notifications';
 import { Check, Save, Info, CheckCircle2, XCircle } from 'lucide-react';
 import { masterDataService } from '../../services/master-data.service';
 import { spcService } from '../../services/spc.service';
+import { usersService } from '../../services/users.service';
 import { TableSkeleton } from '../../components/TableSkeleton';
+import { DatePickerInput } from '@mantine/dates';
+import { useAuthStore } from '../../store/auth-store';
 
 export function SpcEntry() {
   const [searchParams] = useSearchParams();
@@ -21,8 +24,35 @@ export function SpcEntry() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [selectedPartNumber, setSelectedPartNumber] = useState<string | null>(queryPartNumber);
   const [selectedMachineNumber, setSelectedMachineNumber] = useState<string | null>(queryMcNo || null);
-  const [entryDate, setEntryDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [entryDate, setEntryDate] = useState<Date | null>(new Date());
   const [submitting, setSubmitting] = useState(false);
+  const { user } = useAuthStore();
+  const [operatorId, setOperatorId] = useState<string>('');
+
+  const isAdmin = user?.role === 'ADMIN';
+
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: usersService.getAll,
+    enabled: isAdmin,
+  });
+
+  const inspectors = users.filter((u: any) => u.role === 'INSPECTOR');
+
+  const currentMonth = entryDate ? entryDate.getMonth() + 1 : new Date().getMonth() + 1;
+  const currentYear = entryDate ? entryDate.getFullYear() : new Date().getFullYear();
+
+  const { data: monthlyStatus = {} } = useQuery({
+    queryKey: ['spc-monthly-status', selectedPartNumber, selectedMachineNumber, currentMonth, currentYear],
+    queryFn: () => spcService.getMonthlyStatus({
+      partId: selectedPartNumber!,
+      operationId: 'N/A', // Assuming SPC data uses partNumber primarily
+      mcNo: selectedMachineNumber || '',
+      month: currentMonth,
+      year: currentYear
+    }),
+    enabled: !!selectedPartNumber && !!selectedMachineNumber && isAdmin
+  });
 
   // Fetch configured SPC Characteristics
   const { data: characteristics = [], isLoading: loadingChars } = useQuery({
@@ -80,7 +110,7 @@ export function SpcEntry() {
   const { data: duplicateCheck } = useQuery({
     queryKey: ['spc-check-duplicate', entryDate, selectedPartNumber, selectedMachineNumber],
     queryFn: () => spcService.checkDuplicate({
-      date: entryDate,
+      date: entryDate ? entryDate.toISOString() : new Date().toISOString(),
       partNumber: selectedPartNumber!,
       machineNumber: selectedMachineNumber || undefined,
     }),
@@ -198,6 +228,7 @@ export function SpcEntry() {
           lsl: char.lsl,
           sampleValues: numericValues,
           batchLot: values.lotNumber || undefined,
+          ...(isAdmin && entryDate ? { timestamp: entryDate.toISOString() } : {}),
         };
       }));
 
@@ -252,13 +283,38 @@ export function SpcEntry() {
       {/* Customer, Part & Machine Cascading Selection */}
       <Paper p="md" radius="lg" withBorder className="shadow-sm bg-white dark:bg-gray-800">
         <SimpleGrid cols={{ base: 1, sm: 2, md: 6 }} spacing="md">
-          <TextInput
-            type="date"
+          <DatePickerInput
             label="Entry Date"
+            placeholder="Select date"
             value={entryDate}
-            onChange={(e) => setEntryDate(e.target.value)}
+            onChange={setEntryDate}
             required
+            renderDay={(date) => {
+              if (!isAdmin) return <div>{date.getDate()}</div>;
+              const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+              const status = monthlyStatus[dateStr];
+              let bg = undefined;
+              if (status === 'COMPLETE') bg = 'var(--mantine-color-green-filled)';
+              if (status === 'MISSING') bg = 'var(--mantine-color-red-filled)';
+              if (status === 'PARTIAL') bg = 'var(--mantine-color-orange-filled)';
+              return (
+                <div style={{ backgroundColor: bg, color: bg ? 'white' : undefined, borderRadius: '4px', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {date.getDate()}
+                </div>
+              );
+            }}
           />
+          {isAdmin && (
+            <Select
+              label="Operator Name"
+              placeholder="Select Operator"
+              data={inspectors.map((u: any) => ({ value: u.id, label: u.name }))}
+              value={operatorId}
+              onChange={(val) => setOperatorId(val || '')}
+              searchable
+              clearable
+            />
+          )}
 
           <Select
             label="Customer"

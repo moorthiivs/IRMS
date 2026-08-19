@@ -8,6 +8,8 @@ export interface SubmitSpcDto {
   mcNo: string;
   intervalName: string;
   remarks: string | null;
+  entryDate?: string;
+  operatorId?: string;
   details: {
     parameterId: string;
     observedValue: string;
@@ -22,6 +24,11 @@ export const spcService = {
 
   uploadCharacteristics: async (records: any[]) => {
     const { data } = await api.post('/spc/characteristics/upload', { records });
+    return data;
+  },
+
+  getMonthlyStatus: async (params: { year: number; month: number; partId: string; operationId: string; mcNo: string }): Promise<Record<string, 'COMPLETE' | 'PARTIAL' | 'MISSING'>> => {
+    const { data } = await api.get('/spc/monthly-status', { params });
     return data;
   },
 

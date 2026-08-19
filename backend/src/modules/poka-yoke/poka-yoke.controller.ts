@@ -17,6 +17,19 @@ export class PokaYokeController {
     return this.pokaYokeService.getItemsByPart(partId);
   }
 
+  @Get('monthly-status')
+  async getMonthlyStatus(
+    @Query('year') year: string,
+    @Query('month') month: string,
+    @Query('partId') partId: string,
+  ) {
+    return this.pokaYokeService.getMonthlyStatus(
+      parseInt(year, 10),
+      parseInt(month, 10),
+      partId,
+    );
+  }
+
   @Get('transaction/check')
   async checkTransaction(@Query('partId') partId: string, @Query('date') date: string) {
     return this.pokaYokeService.checkTransactionExists(partId, date);

@@ -13,7 +13,9 @@ import { Check, Save, X, AlertTriangle, Info, Filter, SkipForward } from 'lucide
 import { masterDataService } from '../services/master-data.service';
 import { inspectionService } from '../services/inspection.service';
 import { settingsService } from '../services/settings.service';
+import { usersService } from '../services/users.service';
 import { TableSkeleton } from '../components/TableSkeleton';
+import { DatePickerInput } from '@mantine/dates';
 import { useAuthStore } from '../store/auth-store';
 import { CheckCircle2, XCircle, ArrowLeft, ArrowRight } from 'lucide-react';
 
@@ -246,7 +248,35 @@ export function InspectionEntry() {
       intervalName: '1 Half',
       remarks: '',
       readings: {} as Record<string, string>,
+      entryDate: null as Date | null,
+      operatorId: '',
     }
+  });
+
+  // Admin overrides
+  const isAdmin = user?.role === 'ADMIN';
+
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: usersService.getAll,
+    enabled: isAdmin,
+  });
+
+  const inspectors = users.filter((u: any) => u.role === 'INSPECTOR');
+
+  // Fetch monthly status for calendar highlighting
+  const currentMonth = form.values.entryDate ? form.values.entryDate.getMonth() + 1 : new Date().getMonth() + 1;
+  const currentYear = form.values.entryDate ? form.values.entryDate.getFullYear() : new Date().getFullYear();
+  const { data: monthlyStatus = {} } = useQuery({
+    queryKey: ['monthly-status', selectedPart, selectedOp, form.values.mcNo, currentMonth, currentYear],
+    queryFn: () => inspectionService.getMonthlyStatus({
+      partId: selectedPart!,
+      operationId: selectedOp!,
+      mcNo: form.values.mcNo,
+      month: currentMonth,
+      year: currentYear
+    }),
+    enabled: !!selectedPart && !!selectedOp && !!form.values.mcNo && isAdmin
   });
 
   const mcTransactions = useMemo(() => {
@@ -394,6 +424,8 @@ export function InspectionEntry() {
         lotNumber: values.lotNumber || undefined,
         intervalName: values.intervalName,
         remarks: values.remarks,
+        entryDate: values.entryDate ? values.entryDate.toISOString() : undefined,
+        operatorId: values.operatorId || undefined,
         details,
       });
 
@@ -417,6 +449,8 @@ export function InspectionEntry() {
         intervalName: '1 Half',
         remarks: '',
         readings: {},
+        entryDate: null,
+        operatorId: '',
       });
       
     } catch (err: any) {
@@ -463,6 +497,38 @@ export function InspectionEntry() {
       <Title order={2} mb="lg">Inspection Entry</Title>
 
       <Paper withBorder p="md" radius="md" mb="xl">
+        {isAdmin && (
+          <Group mb="md" align="flex-end">
+            <DatePickerInput
+              label="Entry Date"
+              placeholder="Select Date"
+              value={form.values.entryDate}
+              onChange={(date) => form.setFieldValue('entryDate', date)}
+              clearable
+              renderDay={(date) => {
+                const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                const status = monthlyStatus[dateStr];
+                let bg = undefined;
+                if (status === 'COMPLETE') bg = 'var(--mantine-color-green-filled)';
+                if (status === 'MISSING') bg = 'var(--mantine-color-red-filled)';
+                if (status === 'PARTIAL') bg = 'var(--mantine-color-orange-filled)';
+                return (
+                  <div style={{ backgroundColor: bg, color: bg ? 'white' : undefined, borderRadius: '4px', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {date.getDate()}
+                  </div>
+                );
+              }}
+            />
+            <Select
+              label="Operator Name"
+              placeholder="Select Operator"
+              data={inspectors.map((u: any) => ({ value: u.id, label: u.name }))}
+              searchable
+              clearable
+              {...form.getInputProps('operatorId')}
+            />
+          </Group>
+        )}
         <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="md">
           {!user?.customerId && (
             <Select
@@ -586,14 +652,27 @@ export function InspectionEntry() {
                 const has1Half = mcTransactions.some((t: any) => t.shift?.name === shiftName && t.intervalName === '1 Half');
                 const has2Half = mcTransactions.some((t: any) => t.shift?.name === shiftName && t.intervalName === '2 Half');
                 
+                let requiredIntervals = 1;
+                if (parameters.length > 0) {
+                  requiredIntervals = Math.max(...parameters.map(p => getReadingCount(p.freqOfInspn, '1 Half', p.frequencyUnit)), 1);
+                }
+
                 let color = 'gray';
                 let statusText = 'Pending';
-                if (has1Half && has2Half) {
-                  color = 'green';
-                  statusText = 'Completed';
-                } else if (has1Half || has2Half) {
-                  color = 'orange';
-                  statusText = `${has1Half ? '1st Half' : '2nd Half'} Saved`;
+                
+                if (requiredIntervals === 1) {
+                  if (has1Half || has2Half) {
+                    color = 'green';
+                    statusText = 'Completed';
+                  }
+                } else {
+                  if (has1Half && has2Half) {
+                    color = 'green';
+                    statusText = 'Completed';
+                  } else if (has1Half || has2Half) {
+                    color = 'orange';
+                    statusText = `${has1Half ? '1st Half' : '2nd Half'} Saved`;
+                  }
                 }
 
                 return (

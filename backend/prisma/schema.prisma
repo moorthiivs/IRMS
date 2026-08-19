@@ -71,6 +71,10 @@ model Customer {
   id        String   @id @default(uuid())
   name      String   @unique
   code      String?  @unique
+  companyName String?     
+  docNumber   String?     
+  logoUrl     String?     
+  subTitle    String?     
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   machines       String[] @default([])

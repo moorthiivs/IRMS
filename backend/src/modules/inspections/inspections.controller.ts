@@ -55,6 +55,23 @@ export class InspectionsController {
     return this.inspectionsService.getCalendarData(req.user, startDate, endDate, customerId, partId, operationId);
   }
 
+  @Get('monthly-status')
+  async getMonthlyStatus(
+    @Query('year') year: string,
+    @Query('month') month: string,
+    @Query('partId') partId: string,
+    @Query('operationId') operationId: string,
+    @Query('mcNo') mcNo: string,
+  ) {
+    return this.inspectionsService.getMonthlyStatus(
+      parseInt(year, 10),
+      parseInt(month, 10),
+      partId,
+      operationId,
+      mcNo,
+    );
+  }
+
   @Get('dashboard')
   async getDashboard(
     @Request() req,

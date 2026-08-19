@@ -7,6 +7,7 @@ import { modals } from '@mantine/modals';
 import { Save, Check, X } from 'lucide-react';
 import api from '../../lib/axios';
 import { masterDataService } from '../../services/master-data.service';
+import { usersService } from '../../services/users.service';
 
 import { useSearchParams } from 'react-router-dom';
 
@@ -21,6 +22,31 @@ export function PokaYokeEntry() {
   const [selectedPart, setSelectedPart] = useState<string | null>(queryPart);
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [readings, setReadings] = useState<Record<string, { value: string, status: 'PASS' | 'FAIL', correctionAction?: string }>>({});
+  const [operatorId, setOperatorId] = useState<string>('');
+
+  const isAdmin = user?.role === 'ADMIN';
+
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: usersService.getAll,
+    enabled: isAdmin,
+  });
+
+  const inspectors = users.filter((u: any) => u.role === 'INSPECTOR');
+
+  const currentMonth = selectedDate ? selectedDate.getMonth() + 1 : new Date().getMonth() + 1;
+  const currentYear = selectedDate ? selectedDate.getFullYear() : new Date().getFullYear();
+
+  const { data: monthlyStatus = {} } = useQuery({
+    queryKey: ['pokayoke-monthly-status', selectedPart, currentMonth, currentYear],
+    queryFn: async () => {
+      const { data } = await api.get('/pokayoke/monthly-status', {
+        params: { partId: selectedPart, month: currentMonth, year: currentYear }
+      });
+      return data;
+    },
+    enabled: !!selectedPart && isAdmin
+  });
 
   // Common units for the select
   const commonUnits = ['mm', 'kg', '°C', 'bar', 'MPa', 'V', 'A', 'sec', 'min', 'hrs', 'pcs'];
@@ -106,7 +132,11 @@ export function PokaYokeEntry() {
       const payload = {
         partId: selectedPart,
         date: selectedDate.toISOString(),
+        shiftId: null, // PokaYoke doesn't use shift right now
+        mcNo: null,
         readings: readingsArray,
+        entryDate: selectedDate.toISOString(),
+        operatorId: operatorId || undefined,
       };
       const { data } = await api.post('/pokayoke/transaction', payload);
       return data;
@@ -247,7 +277,32 @@ export function PokaYokeEntry() {
             onChange={setSelectedDate}
             required
             style={{ width: 200 }}
+            renderDay={(date) => {
+              if (!isAdmin) return <div>{date.getDate()}</div>;
+              const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+              const status = monthlyStatus[dateStr];
+              let bg = undefined;
+              if (status === 'COMPLETE') bg = 'var(--mantine-color-green-filled)';
+              if (status === 'MISSING') bg = 'var(--mantine-color-red-filled)';
+              return (
+                <div style={{ backgroundColor: bg, color: bg ? 'white' : undefined, borderRadius: '4px', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {date.getDate()}
+                </div>
+              );
+            }}
           />
+          {isAdmin && (
+            <Select
+              label="Operator Name"
+              placeholder="Select Operator"
+              data={inspectors.map((u: any) => ({ value: u.id, label: u.name }))}
+              value={operatorId}
+              onChange={(val) => setOperatorId(val || '')}
+              searchable
+              clearable
+              style={{ width: 250 }}
+            />
+          )}
         </Group>
 
         {selectedPart && (

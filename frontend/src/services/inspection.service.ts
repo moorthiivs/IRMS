@@ -9,6 +9,8 @@ export interface SubmitInspectionDto {
   mcNo: string;
   intervalName: string;
   remarks: string | null;
+  entryDate?: string;
+  operatorId?: string;
   details: {
     parameterId: string;
     observedValue: string;
@@ -36,6 +38,11 @@ export const inspectionService = {
 
   getCalendarData: async (params: { startDate: string; endDate: string; customerId?: string; partId?: string; operationId?: string }) => {
     const { data } = await api.get('/inspections/calendar', { params });
+    return data;
+  },
+
+  getMonthlyStatus: async (params: { year: number; month: number; partId: string; operationId: string; mcNo: string }): Promise<Record<string, 'COMPLETE' | 'PARTIAL' | 'MISSING'>> => {
+    const { data } = await api.get('/inspections/monthly-status', { params });
     return data;
   },
 

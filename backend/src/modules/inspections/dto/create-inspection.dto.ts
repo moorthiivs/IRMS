@@ -40,6 +40,14 @@ export class CreateInspectionDto {
   @IsOptional()
   remarks?: string;
 
+  @IsString()
+  @IsOptional()
+  entryDate?: string;
+
+  @IsString()
+  @IsOptional()
+  operatorId?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateInspectionDetailDto)

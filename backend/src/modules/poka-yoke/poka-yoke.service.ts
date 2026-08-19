@@ -39,13 +39,16 @@ export class PokaYokeService {
   }
 
   async createTransaction(user: any, dto: any) {
-    const { partId, date, shiftId, mcNo, readings } = dto;
+    const { partId, date, shiftId, mcNo, readings, entryDate, operatorId } = dto;
     
-    // date should be a valid ISO string representing the day
-    const transactionDate = new Date(date);
-    const startOfDay = new Date(transactionDate);
+    const isAdmin = user?.role === 'ADMIN';
+    const finalInspectorId = (isAdmin && operatorId) ? operatorId : user.id;
+    const finalDate = (isAdmin && entryDate) ? new Date(entryDate) : new Date(date);
+    const finalTimestamp = (isAdmin && entryDate) ? new Date(entryDate) : new Date();
+
+    const startOfDay = new Date(finalDate);
     startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(transactionDate);
+    const endOfDay = new Date(finalDate);
     endOfDay.setHours(23, 59, 59, 999);
 
     // Check if an entry already exists for this part on this day
@@ -69,12 +72,13 @@ export class PokaYokeService {
     // Create transaction
     const transaction = await this.prisma.pokaYokeTransaction.create({
       data: {
-        inspectorId: user.id,
+        inspectorId: finalInspectorId,
         partId,
         shiftId,
         mcNo,
         customerId: part?.customerId,
-        date: transactionDate,
+        date: finalDate,
+        inspectionTimestamp: finalTimestamp,
         status: TransactionStatus.PASSED, // Default to passed, logic below will update if needed
         details: {
           create: readings.map((r: any) => ({
@@ -148,6 +152,55 @@ export class PokaYokeService {
       items,
       transactions,
     };
+  }
+
+  async getMonthlyStatus(year: number, month: number, partId: string) {
+    if (!partId) return {};
+
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+    const today = new Date();
+
+    // Poka-yoke is expected once per day
+    const expectedPerDay = 1; 
+
+    const transactions = await this.prisma.pokaYokeTransaction.findMany({
+      where: {
+        partId,
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        date: true,
+      },
+    });
+
+    const statusMap: Record<string, 'COMPLETE' | 'MISSING'> = {};
+    const countsPerDay: Record<string, number> = {};
+
+    transactions.forEach(tx => {
+      const dateStr = `${tx.date.getFullYear()}-${String(tx.date.getMonth() + 1).padStart(2, '0')}-${String(tx.date.getDate()).padStart(2, '0')}`;
+      countsPerDay[dateStr] = (countsPerDay[dateStr] || 0) + 1;
+    });
+
+    const daysInMonth = endDate.getDate();
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month - 1, day);
+      if (date > today) continue;
+
+      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const count = countsPerDay[dateStr] || 0;
+
+      if (count >= expectedPerDay) {
+        statusMap[dateStr] = 'COMPLETE';
+      } else {
+        statusMap[dateStr] = 'MISSING';
+      }
+    }
+
+    return statusMap;
   }
 
   async importExcel(buffer: Buffer, providedPartId?: string, partNumber?: string, partName?: string) {

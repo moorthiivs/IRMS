@@ -101,7 +101,12 @@ export class InspectionsService {
   }
 
   async createInspection(userId: string, dto: CreateInspectionDto) {
-    const { partId, operationId, shiftId, lotNumber, mcNo, intervalName, remarks, details } = dto;
+    const { partId, operationId, shiftId, lotNumber, mcNo, intervalName, remarks, details, entryDate, operatorId } = dto;
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const isAdmin = user?.role === 'ADMIN';
+    const finalInspectorId = (isAdmin && operatorId) ? operatorId : userId;
+    const finalDate = (isAdmin && entryDate) ? new Date(entryDate) : new Date();
 
     // 0. Check if lot number is required
     const lotNumberRequired = await this.prisma.systemSettings.findUnique({ where: { key: 'lot_number_required' } });
@@ -110,7 +115,7 @@ export class InspectionsService {
     }
 
     // 1. Prevent Duplicate Entry
-    const { due, message } = await this.checkInspectionDue(partId, operationId, intervalName, shiftId, undefined, mcNo);
+    const { due, message } = await this.checkInspectionDue(partId, operationId, intervalName, shiftId, finalDate.toISOString(), mcNo);
     if (!due) {
       throw new BadRequestException(message);
     }
@@ -173,7 +178,8 @@ export class InspectionsService {
     // 3. Save Inspection Transaction + Details
     const transaction = await this.prisma.inspectionTransaction.create({
       data: {
-        inspectorId: userId,
+        inspectorId: finalInspectorId,
+        inspectionTimestamp: finalDate,
         partId,
         operationId,
         shiftId,
@@ -218,6 +224,87 @@ export class InspectionsService {
     }
 
     return transaction;
+  }
+
+  // ── Monthly Status ────────────────────────────────────────────────
+  async getMonthlyStatus(year: number, month: number, partId: string, operationId: string, mcNo: string) {
+    if (!partId || !operationId || !mcNo) return {};
+
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+    const today = new Date();
+
+    const shifts = await this.prisma.shift.findMany();
+    
+    // Dynamically calculate expected intervals per shift
+    const parameters = await this.prisma.inspectionParameter.findMany({
+      where: { partId, operationId }
+    });
+
+    let maxIntervalsPerShift = 1; // Default fallback
+    if (parameters.length > 0) {
+      maxIntervalsPerShift = 0;
+      for (const param of parameters) {
+        if (param.frequencyUnit === 'day' || param.frequencyUnit === 'Day-wise') {
+          continue;
+        }
+        
+        let target = 1;
+        const freqStr = String(param.freqOfInspn || '').toLowerCase().trim();
+        const parsedFreq = parseInt(freqStr.replace(/\D/g, ''), 10);
+        if (!isNaN(parsedFreq) && parsedFreq > 0) {
+          target = parsedFreq;
+        }
+        
+        if (target > maxIntervalsPerShift) {
+          maxIntervalsPerShift = target;
+        }
+      }
+    }
+
+    const expectedPerDay = maxIntervalsPerShift === 0 ? 1 : shifts.length * maxIntervalsPerShift;
+
+    const transactions = await this.prisma.inspectionTransaction.findMany({
+      where: {
+        partId,
+        operationId,
+        mcNo,
+        inspectionTimestamp: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        inspectionTimestamp: true,
+      },
+    });
+
+    const statusMap: Record<string, 'COMPLETE' | 'PARTIAL' | 'MISSING'> = {};
+    const countsPerDay: Record<string, number> = {};
+
+    transactions.forEach(tx => {
+      const dateStr = `${tx.inspectionTimestamp.getFullYear()}-${String(tx.inspectionTimestamp.getMonth() + 1).padStart(2, '0')}-${String(tx.inspectionTimestamp.getDate()).padStart(2, '0')}`;
+      countsPerDay[dateStr] = (countsPerDay[dateStr] || 0) + 1;
+    });
+
+    const daysInMonth = endDate.getDate();
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month - 1, day);
+      if (date > today) continue;
+
+      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const count = countsPerDay[dateStr] || 0;
+
+      if (count >= expectedPerDay) {
+        statusMap[dateStr] = 'COMPLETE';
+      } else if (count > 0) {
+        statusMap[dateStr] = 'PARTIAL';
+      } else {
+        statusMap[dateStr] = 'MISSING';
+      }
+    }
+
+    return statusMap;
   }
 
   // ── Calendar Data ─────────────────────────────────────────────────

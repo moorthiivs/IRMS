@@ -952,6 +952,53 @@ export function Reports() {
     return tx?.inspector?.name || "-";
   };
 
+  // Dynamic frequency-based helpers for merged footer
+  const maxIntervalsPerShift = useMemo(() => {
+    if (parameters.length === 0) return 1;
+    let allOnce = true;
+    for (const param of parameters) {
+      if (!isOncePerDay(param) && !isOncePerShift(param)) {
+        allOnce = false;
+        break;
+      }
+    }
+    return allOnce ? 1 : 2;
+  }, [parameters]);
+
+  const getMergedFooterStatus = (shiftName: string) => {
+    const shiftTxs = dailyReportTransactions
+      .filter((t: any) => t.shift?.name?.toLowerCase() === shiftName.toLowerCase())
+      .sort((a: any, b: any) => new Date(a.inspectionTimestamp).getTime() - new Date(b.inspectionTimestamp).getTime());
+    if (shiftTxs.length === 0) return '-';
+    const tx = shiftTxs[shiftTxs.length - 1];
+    return (
+      <Badge color={tx.status === 'PASSED' ? 'green' : 'red'} variant="filled" size="xs">
+        {tx.status === 'PASSED' ? 'OK' : 'NG'}
+      </Badge>
+    );
+  };
+
+  const getMergedInspectorSignature = (shiftName: string) => {
+    const shiftTxs = dailyReportTransactions
+      .filter((t: any) => t.shift?.name?.toLowerCase() === shiftName.toLowerCase())
+      .sort((a: any, b: any) => new Date(a.inspectionTimestamp).getTime() - new Date(b.inspectionTimestamp).getTime());
+    if (shiftTxs.length === 0) return null;
+    const tx = shiftTxs[shiftTxs.length - 1];
+    if (!tx?.inspector?.signature) return null;
+    return (
+      <img src={tx.inspector.signature} alt="Sig" style={{ height: 32, maxWidth: '100%', objectFit: 'contain', display: 'inline-block', mixBlendMode: 'multiply', verticalAlign: 'middle' }} />
+    );
+  };
+
+  const getMergedFooterInspector = (shiftName: string) => {
+    const shiftTxs = dailyReportTransactions
+      .filter((t: any) => t.shift?.name?.toLowerCase() === shiftName.toLowerCase())
+      .sort((a: any, b: any) => new Date(a.inspectionTimestamp).getTime() - new Date(b.inspectionTimestamp).getTime());
+    if (shiftTxs.length === 0) return '-';
+    const tx = shiftTxs[shiftTxs.length - 1];
+    return tx?.inspector?.name || '-';
+  };
+
   const getRemarksText = () => {
     const activeRemarks = dailyReportTransactions
       .filter((t) => t.remarks)
@@ -2698,12 +2745,22 @@ export function Reports() {
                     <Table.Td className="text-center text-[11px] whitespace-nowrap">
                       Status
                     </Table.Td>
-                    <Table.Td>{getFooterStatus("Shift A", "1 Half")}</Table.Td>
-                    <Table.Td>{getFooterStatus("Shift A", "2 Half")}</Table.Td>
-                    <Table.Td>{getFooterStatus("Shift B", "1 Half")}</Table.Td>
-                    <Table.Td>{getFooterStatus("Shift B", "2 Half")}</Table.Td>
-                    <Table.Td>{getFooterStatus("Shift C", "1 Half")}</Table.Td>
-                    <Table.Td>{getFooterStatus("Shift C", "2 Half")}</Table.Td>
+                    {maxIntervalsPerShift === 1 ? (
+                      <>
+                        <Table.Td colSpan={2} className="text-center">{getMergedFooterStatus("Shift A")}</Table.Td>
+                        <Table.Td colSpan={2} className="text-center">{getMergedFooterStatus("Shift B")}</Table.Td>
+                        <Table.Td colSpan={2} className="text-center">{getMergedFooterStatus("Shift C")}</Table.Td>
+                      </>
+                    ) : (
+                      <>
+                        <Table.Td>{getFooterStatus("Shift A", "1 Half")}</Table.Td>
+                        <Table.Td>{getFooterStatus("Shift A", "2 Half")}</Table.Td>
+                        <Table.Td>{getFooterStatus("Shift B", "1 Half")}</Table.Td>
+                        <Table.Td>{getFooterStatus("Shift B", "2 Half")}</Table.Td>
+                        <Table.Td>{getFooterStatus("Shift C", "1 Half")}</Table.Td>
+                        <Table.Td>{getFooterStatus("Shift C", "2 Half")}</Table.Td>
+                      </>
+                    )}
                   </Table.Tr>
                   <Table.Tr>
                     <Table.Td className="text-center font-bold">NP</Table.Td>
@@ -2720,30 +2777,46 @@ export function Reports() {
                     <Table.Td className="text-center font-bold whitespace-nowrap text-[11px] p-1">
                       Inspected by
                     </Table.Td>
-                    <Table.Td className="text-center text-[10px]">
-                      {getInspectorSignature("Shift A", "1 Half") ||
-                        getFooterInspector("Shift A", "1 Half")}
-                    </Table.Td>
-                    <Table.Td className="text-center text-[10px]">
-                      {getInspectorSignature("Shift A", "2 Half") ||
-                        getFooterInspector("Shift A", "2 Half")}
-                    </Table.Td>
-                    <Table.Td className="text-center text-[10px]">
-                      {getInspectorSignature("Shift B", "1 Half") ||
-                        getFooterInspector("Shift B", "1 Half")}
-                    </Table.Td>
-                    <Table.Td className="text-center text-[10px]">
-                      {getInspectorSignature("Shift B", "2 Half") ||
-                        getFooterInspector("Shift B", "2 Half")}
-                    </Table.Td>
-                    <Table.Td className="text-center text-[10px]">
-                      {getInspectorSignature("Shift C", "1 Half") ||
-                        getFooterInspector("Shift C", "1 Half")}
-                    </Table.Td>
-                    <Table.Td className="text-center text-[10px]">
-                      {getInspectorSignature("Shift C", "2 Half") ||
-                        getFooterInspector("Shift C", "2 Half")}
-                    </Table.Td>
+                    {maxIntervalsPerShift === 1 ? (
+                      <>
+                        <Table.Td colSpan={2} className="text-center text-[10px]">
+                          {getMergedInspectorSignature("Shift A") || getMergedFooterInspector("Shift A")}
+                        </Table.Td>
+                        <Table.Td colSpan={2} className="text-center text-[10px]">
+                          {getMergedInspectorSignature("Shift B") || getMergedFooterInspector("Shift B")}
+                        </Table.Td>
+                        <Table.Td colSpan={2} className="text-center text-[10px]">
+                          {getMergedInspectorSignature("Shift C") || getMergedFooterInspector("Shift C")}
+                        </Table.Td>
+                      </>
+                    ) : (
+                      <>
+                        <Table.Td className="text-center text-[10px]">
+                          {getInspectorSignature("Shift A", "1 Half") ||
+                            getFooterInspector("Shift A", "1 Half")}
+                        </Table.Td>
+                        <Table.Td className="text-center text-[10px]">
+                          {getInspectorSignature("Shift A", "2 Half") ||
+                            getFooterInspector("Shift A", "2 Half")}
+                        </Table.Td>
+                        <Table.Td className="text-center text-[10px]">
+                          {getInspectorSignature("Shift B", "1 Half") ||
+                            getFooterInspector("Shift B", "1 Half")}
+                        </Table.Td>
+                        <Table.Td className="text-center text-[10px]">
+                          {getInspectorSignature("Shift B", "2 Half") ||
+                            getFooterInspector("Shift B", "2 Half")}
+                        </Table.Td>
+                        <Table.Td className="text-center text-[10px]">
+                          {getInspectorSignature("Shift C", "1 Half") ||
+                            getFooterInspector("Shift C", "1 Half")}
+                        </Table.Td>
+                        <Table.Td className="text-center text-[10px]">
+                          {getInspectorSignature("Shift C", "2 Half") ||
+                            getFooterInspector("Shift C", "2 Half")}
+                        </Table.Td>
+                      </>
+                    )}
                   </Table.Tr>
                   <Table.Tr>
                     <Table.Td className="text-center font-bold">SC</Table.Td>

@@ -1,13 +1,13 @@
 import { useState, useRef } from 'react';
-import { Title, Paper, Select, Button, Group, Text, SimpleGrid, Switch, ActionIcon, Tooltip, Menu, Modal, NumberInput } from '@mantine/core';
+import { Title, Paper, Select, Button, Group, Text, SimpleGrid, ActionIcon, Tooltip, Menu, Modal, NumberInput, Badge } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { useQuery } from '@tanstack/react-query';
 import ReactECharts from 'echarts-for-react';
-import { Download, Printer, Settings as SettingsIcon, FileSpreadsheet, ImageIcon, CheckCircle2, XCircle, Maximize, Minimize, AlertTriangle } from 'lucide-react';
+import { Download, Printer, Settings as SettingsIcon, FileSpreadsheet, ImageIcon, Maximize, Minimize, Activity, Target, Shield, Sigma } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { masterDataService } from '../services/master-data.service';
 import { inspectionService } from '../services/inspection.service';
-import { calculateSpcStatistics, SpcResult } from '../utils/spc';
+import { calculateSpcStatistics, SpcResult, calculateXBarRChartStats, XBarRResult } from '../utils/spc';
 import * as XLSX from 'xlsx';
 
 function StatCard({ title, value, unit = '' }: { title: string; value: string | number; unit?: string }) {
@@ -17,6 +17,38 @@ function StatCard({ title, value, unit = '' }: { title: string; value: string | 
       <Text size="xl" fw={700} className="text-gray-900 dark:text-gray-100">
         {value} {unit && <span className="text-sm text-gray-500 font-normal">{unit}</span>}
       </Text>
+    </Paper>
+  );
+}
+
+function KpiCard({ icon: Icon, title, value, unit, highlight = false, subtext = '', iconColor = 'blue' }: any) {
+  const colorMap: Record<string, string> = {
+    blue: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20',
+    purple: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20',
+    red: 'text-red-600 bg-red-50 dark:bg-red-900/20',
+  };
+  const borderClass = highlight ? 'border-red-200 dark:border-red-800 bg-red-50/30 dark:bg-red-900/10' : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1b1e]';
+  const valColor = highlight ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100';
+
+  return (
+    <Paper withBorder p="md" radius="lg" className={`flex items-center gap-4 shadow-sm ${borderClass}`}>
+      <div className={`p-3 rounded-xl ${colorMap[iconColor]}`}>
+        <Icon size={24} />
+      </div>
+      <div>
+        <Text size="xs" c="dimmed" fw={600}>{title}</Text>
+        <div className="flex items-baseline gap-1">
+          <Text size="xl" fw={800} className={valColor}>
+            {value}
+          </Text>
+          {unit && <Text size="sm" c="dimmed" className="ml-1">{unit}</Text>}
+        </div>
+        {subtext && (
+          <Text size="xs" fw={600} className={highlight ? 'text-red-500' : 'text-gray-500'}>
+            {subtext}
+          </Text>
+        )}
+      </div>
     </Paper>
   );
 }
@@ -34,13 +66,14 @@ export function SpcAnalysis() {
   // Settings State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [calcMethod, setCalcMethod] = useState<'STATISTICAL' | 'FIXED'>('STATISTICAL');
-  const [showUclLcl, setShowUclLcl] = useState(true);
-  const [showSpecLimits, setShowSpecLimits] = useState(true);
-  const [showMean, setShowMean] = useState(true);
   const [customUsl, setCustomUsl] = useState<number | ''>('');
   const [customLsl, setCustomLsl] = useState<number | ''>('');
-  const [customSigma, setCustomSigma] = useState<number | ''>('');
   const [isFullView, setIsFullView] = useState(false);
+
+  // X-Bar R Chart Settings
+  const [chartType, setChartType] = useState<'I' | 'XBAR_R'>('XBAR_R');
+  const [subgroupStrategy, setSubgroupStrategy] = useState<'FIXED' | 'SHIFT'>('FIXED');
+  const [subgroupSize, setSubgroupSize] = useState<number>(5);
 
   // Queries
   const { data: parts = [] } = useQuery({
@@ -121,7 +154,11 @@ export function SpcAnalysis() {
   const usl = customUsl !== '' ? customUsl : (activeParam?.controlLimitMax !== undefined ? activeParam.controlLimitMax : null);
   const lsl = customLsl !== '' ? customLsl : (activeParam?.controlLimitMin !== undefined ? activeParam.controlLimitMin : null);
   
-  const spcStats: SpcResult = calculateSpcStatistics(rawValues, usl, lsl, calcMethod, customSigma !== '' ? customSigma : null);
+  const spcStats: SpcResult = calculateSpcStatistics(rawValues, usl, lsl, calcMethod, null);
+
+  const xbarStats: XBarRResult | null = chartType === 'XBAR_R' && !isAttributeMode 
+    ? calculateXBarRChartStats(readings, subgroupStrategy, subgroupStrategy === 'FIXED' ? subgroupSize : 'shiftName', usl, lsl) 
+    : null;
 
   // ECharts Option Builder
   const buildChartOption = () => {
@@ -150,65 +187,120 @@ export function SpcAnalysis() {
             `;
           }
         },
-        toolbox: {
-          feature: {
-            dataZoom: {},
-            restore: {},
-          }
-        },
+        toolbox: { feature: { dataZoom: {}, restore: {} } },
         grid: { left: '5%', right: '8%', bottom: '10%', top: '15%', containLabel: true },
-        dataZoom: [
-          { type: 'inside', start: 0, end: 100 },
-          { type: 'slider', start: 0, end: 100 }
-        ],
+        dataZoom: [{ type: 'inside', start: 0, end: 100 }, { type: 'slider', start: 0, end: 100 }],
         xAxis: {
           type: 'category',
           data: xAxisLabels,
           boundaryGap: true,
-          axisLabel: {
-            formatter: function (value: string) {
-              return value.split(' ')[0];
-            }
+          axisLabel: { formatter: function (value: string) { return value.split(' ')[0]; } }
+        },
+        yAxis: { type: 'category', data: ['Fail', 'Pass'] },
+        series: [{
+          name: 'Status',
+          type: 'scatter',
+          data: dataSeries,
+          symbolSize: 12,
+          itemStyle: { color: function(params: any) { return params.value === 'Fail' ? '#ef4444' : '#10b981'; } }
+        }]
+      };
+    }
+
+    if (chartType === 'XBAR_R' && xbarStats && xbarStats.subgroups.length > 0) {
+      const { subgroups, xDoubleBar, rBar, xBarUcl, xBarLcl, rUcl, rLcl } = xbarStats;
+      const xBarData = subgroups.map(sg => sg.xBar);
+      const rData = subgroups.map(sg => sg.r);
+      const labels = subgroups.map(sg => String(sg.id));
+
+      return {
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: { type: 'cross' },
+          formatter: function (params: any) {
+            const idx = params[0].dataIndex;
+            const sg = subgroups[idx];
+            let html = `<div style="font-weight:bold;margin-bottom:5px;">Subgroup ${sg.id}</div>`;
+            html += `N = ${sg.size}<br/>`;
+            html += `Mean: <strong>${sg.xBar.toFixed(4)}</strong><br/>`;
+            html += `Range: <strong>${sg.r.toFixed(4)}</strong><br/>`;
+            html += `<hr style="margin: 5px 0;" />`;
+            html += `<div style="font-size: 11px;">Values: ${sg.readings.map(r => r.value).join(', ')}</div>`;
+            return html;
           }
         },
-        yAxis: {
-          type: 'category',
-          data: ['Fail', 'Pass']
-        },
+        axisPointer: { link: [{ xAxisIndex: 'all' }] },
+        toolbox: { feature: { dataZoom: {}, restore: {} } },
+        dataZoom: [
+          { type: 'inside', xAxisIndex: [0, 1], start: 0, end: 100 },
+          { type: 'slider', xAxisIndex: [0, 1], start: 0, end: 100, bottom: 10 }
+        ],
+        grid: [
+          { left: '6%', right: '10%', top: '8%', height: '35%' }, 
+          { left: '6%', right: '10%', top: '55%', height: '35%' }
+        ],
+        xAxis: [
+          { gridIndex: 0, type: 'category', data: labels, boundaryGap: true, axisLabel: { show: false } },
+          { gridIndex: 1, type: 'category', data: labels, boundaryGap: true, name: 'Subgroup', nameLocation: 'middle', nameGap: 25 }
+        ],
+        yAxis: [
+          { gridIndex: 0, type: 'value', scale: true, name: 'Mean (mm)', nameTextStyle: { color: '#2563eb', fontWeight: 'bold' }, splitLine: { lineStyle: { type: 'dashed', color: '#f3f4f6' } } },
+          { gridIndex: 1, type: 'value', scale: true, name: 'Range (mm)', nameTextStyle: { color: '#9333ea', fontWeight: 'bold' }, splitLine: { lineStyle: { type: 'dashed', color: '#f3f4f6' } } }
+        ],
         series: [
           {
-            name: 'Status',
-            type: 'scatter',
-            data: dataSeries,
-            symbolSize: 12,
-            itemStyle: {
-              color: function(params: any) {
-                return params.value === 'Fail' ? '#ef4444' : '#10b981';
-              }
+            name: 'X̄',
+            type: 'line',
+            xAxisIndex: 0,
+            yAxisIndex: 0,
+            data: xBarData,
+            itemStyle: { color: '#2563eb' },
+            symbol: 'circle',
+            symbolSize: 6,
+            markLine: {
+              symbol: ['none', 'none'],
+              label: { position: 'end', distance: 10 },
+              data: [
+                { yAxis: xDoubleBar, lineStyle: { color: '#10b981', type: 'solid' }, label: { formatter: `CL ${xDoubleBar.toFixed(3)}`, color: '#10b981', fontWeight: 'bold' } },
+                { yAxis: xBarUcl, lineStyle: { color: '#ef4444', type: 'dashed' }, label: { formatter: `UCL ${xBarUcl.toFixed(3)}`, color: '#ef4444', fontWeight: 'bold' } },
+                { yAxis: xBarLcl, lineStyle: { color: '#ef4444', type: 'dashed' }, label: { formatter: `LCL ${xBarLcl.toFixed(3)}`, color: '#ef4444', fontWeight: 'bold' } }
+              ]
+            }
+          },
+          {
+            name: 'R',
+            type: 'line',
+            xAxisIndex: 1,
+            yAxisIndex: 1,
+            data: rData,
+            itemStyle: { color: '#9333ea' },
+            symbol: 'circle',
+            symbolSize: 6,
+            markLine: {
+              symbol: ['none', 'none'],
+              label: { position: 'end', distance: 10 },
+              data: [
+                { yAxis: rBar, lineStyle: { color: '#10b981', type: 'solid' }, label: { formatter: `CL ${rBar.toFixed(3)}`, color: '#10b981', fontWeight: 'bold' } },
+                { yAxis: rUcl, lineStyle: { color: '#ef4444', type: 'dashed' }, label: { formatter: `UCL ${rUcl.toFixed(3)}`, color: '#ef4444', fontWeight: 'bold' } },
+                { yAxis: rLcl, lineStyle: { color: '#ef4444', type: 'dashed' }, label: { formatter: `LCL ${rLcl.toFixed(3)}`, color: '#ef4444', fontWeight: 'bold' } }
+              ]
             }
           }
         ]
       };
     }
 
+    // Original I-Chart Option
     const dataSeries = readings.map(r => r.value);
-
     const markLines: any[] = [];
-    
-    if (showMean) {
-      markLines.push({ yAxis: spcStats.cl, lineStyle: { color: '#10b981', type: 'solid', width: 2 }, label: { formatter: `Mean (${spcStats.cl.toFixed(4)})`, position: 'end' } });
-    }
-    if (showUclLcl) {
-      markLines.push({ yAxis: spcStats.ucl, lineStyle: { color: '#f59e0b', type: 'dashed' }, label: { formatter: `UCL (${spcStats.ucl.toFixed(4)})`, position: 'insideEndTop' } });
-      markLines.push({ yAxis: spcStats.lcl, lineStyle: { color: '#f59e0b', type: 'dashed' }, label: { formatter: `LCL (${spcStats.lcl.toFixed(4)})`, position: 'insideEndBottom' } });
-    }
-    if (showSpecLimits) {
-      if (usl !== null) markLines.push({ yAxis: usl, lineStyle: { color: '#ef4444', type: 'solid' }, label: { formatter: `USL (${Number(usl).toFixed(4)})`, position: 'insideStartTop' } });
-      if (lsl !== null) markLines.push({ yAxis: lsl, lineStyle: { color: '#ef4444', type: 'solid' }, label: { formatter: `LSL (${Number(lsl).toFixed(4)})`, position: 'insideStartBottom' } });
-    }
+    markLines.push({ yAxis: spcStats.cl, lineStyle: { color: '#10b981', type: 'solid', width: 2 }, label: { formatter: `Mean (${spcStats.cl.toFixed(4)})`, position: 'end' } });
+    markLines.push({ yAxis: spcStats.ucl, lineStyle: { color: '#f59e0b', type: 'dashed' }, label: { formatter: `UCL (${spcStats.ucl.toFixed(4)})`, position: 'insideEndTop' } });
+    markLines.push({ yAxis: spcStats.lcl, lineStyle: { color: '#f59e0b', type: 'dashed' }, label: { formatter: `LCL (${spcStats.lcl.toFixed(4)})`, position: 'insideEndBottom' } });
+    if (usl !== null) markLines.push({ yAxis: usl, lineStyle: { color: '#ef4444', type: 'solid' }, label: { formatter: `USL (${Number(usl).toFixed(4)})`, position: 'insideStartTop' } });
+    if (lsl !== null) markLines.push({ yAxis: lsl, lineStyle: { color: '#ef4444', type: 'solid' }, label: { formatter: `LSL (${Number(lsl).toFixed(4)})`, position: 'insideStartBottom' } });
 
     return {
-      title: { text: activeParam ? `${activeParam.parameterName} SPC Chart` : 'SPC Chart', left: 'center' },
+      title: { text: activeParam ? `${activeParam.parameterName} I-Chart` : 'I-Chart', left: 'center' },
       tooltip: {
         trigger: 'axis',
         formatter: function (params: any) {
@@ -222,53 +314,32 @@ export function SpcAnalysis() {
             <hr style="margin: 5px 0; border: 0; border-top: 1px solid #ccc;" />
             <div style="font-size: 11px; color: #666; line-height: 1.4;">
           `;
-          if (showMean) html += `Mean: ${spcStats.cl.toFixed(4)}<br/>`;
-          if (showUclLcl) html += `UCL: ${spcStats.ucl.toFixed(4)} &nbsp;|&nbsp; LCL: ${spcStats.lcl.toFixed(4)}<br/>`;
-          if (showSpecLimits) html += `USL: ${usl !== null ? Number(usl).toFixed(4) : 'N/A'} &nbsp;|&nbsp; LSL: ${lsl !== null ? Number(lsl).toFixed(4) : 'N/A'}`;
+          html += `Mean: ${spcStats.cl.toFixed(4)}<br/>`;
+          html += `UCL: ${spcStats.ucl.toFixed(4)} &nbsp;|&nbsp; LCL: ${spcStats.lcl.toFixed(4)}<br/>`;
+          html += `USL: ${usl !== null ? Number(usl).toFixed(4) : 'N/A'} &nbsp;|&nbsp; LSL: ${lsl !== null ? Number(lsl).toFixed(4) : 'N/A'}`;
           html += `</div>`;
           return html;
         }
       },
-      toolbox: {
-        feature: {
-          dataZoom: {},
-          restore: {},
-        }
-      },
+      toolbox: { feature: { dataZoom: {}, restore: {} } },
       grid: { left: '5%', right: '12%', bottom: '10%', top: '15%', containLabel: true },
-      dataZoom: [
-        { type: 'inside', start: 0, end: 100 },
-        { type: 'slider', start: 0, end: 100 }
-      ],
-      xAxis: {
-        type: 'category',
-        data: xAxisLabels,
-        boundaryGap: false,
-        axisLabel: {
-          formatter: function (value: string) {
-            return value.split(' ')[0]; // Just show date on axis to save space
-          }
-        }
-      },
+      dataZoom: [{ type: 'inside', start: 0, end: 100 }, { type: 'slider', start: 0, end: 100 }],
+      xAxis: { type: 'category', data: xAxisLabels, boundaryGap: false, axisLabel: { formatter: function (value: string) { return value.split(' ')[0]; } } },
       yAxis: {
         type: 'value',
         scale: true,
-        axisLabel: {
-          formatter: function (value: number) {
-            return parseFloat(value.toFixed(4));
-          }
-        },
+        axisLabel: { formatter: function (value: number) { return parseFloat(value.toFixed(4)); } },
         min: function (value: any) {
           const limits = [value.min];
-          if (showSpecLimits && lsl !== null) limits.push(lsl);
-          if (showUclLcl && spcStats.lcl !== undefined) limits.push(spcStats.lcl);
+          if (lsl !== null) limits.push(lsl);
+          if (spcStats.lcl !== undefined) limits.push(spcStats.lcl);
           const min = Math.min(...limits);
           return min - Math.abs(min * 0.005);
         },
         max: function (value: any) {
           const limits = [value.max];
-          if (showSpecLimits && usl !== null) limits.push(usl);
-          if (showUclLcl && spcStats.ucl !== undefined) limits.push(spcStats.ucl);
+          if (usl !== null) limits.push(usl);
+          if (spcStats.ucl !== undefined) limits.push(spcStats.ucl);
           const max = Math.max(...limits);
           return max + Math.abs(max * 0.005);
         },
@@ -283,11 +354,7 @@ export function SpcAnalysis() {
           symbolSize: 6,
           itemStyle: { color: '#3b82f6' },
           lineStyle: { width: 2 },
-          markLine: {
-            symbol: ['none', 'none'],
-            data: markLines,
-            animation: false
-          }
+          markLine: { symbol: ['none', 'none'], data: markLines, animation: false }
         }
       ]
     };
@@ -295,25 +362,27 @@ export function SpcAnalysis() {
 
   const exportToExcel = () => {
     if (readings.length === 0) return;
-    const wsData = readings.map((r, i) => ({
-      '#': i + 1,
-      'Date': r.date,
-      'Time': new Date(r.timestamp).toLocaleTimeString(),
-      'Shift': r.shiftName,
-      'Interval': r.interval,
-      'Value': r.value
-    }));
     
-    // Add stats summary rows at bottom
-    wsData.push({ '#' : '', 'Date': '', 'Time': '', 'Shift': '', 'Interval': '', 'Value': '' } as any);
-    wsData.push({ '#' : 'STATISTICS', 'Date': '', 'Time': '', 'Shift': '', 'Interval': '', 'Value': '' } as any);
-    wsData.push({ '#' : 'Mean', 'Date': spcStats.mean.toFixed(4), 'Time': '', 'Shift': '', 'Interval': '', 'Value': '' } as any);
-    wsData.push({ '#' : 'StdDev (σ)', 'Date': spcStats.sigma.toFixed(4), 'Time': '', 'Shift': '', 'Interval': '', 'Value': '' } as any);
-    wsData.push({ '#' : 'Cp', 'Date': spcStats.cp ? spcStats.cp.toFixed(3) : 'N/A', 'Time': '', 'Shift': '', 'Interval': '', 'Value': '' } as any);
-    wsData.push({ '#' : 'Cpk', 'Date': spcStats.cpk ? spcStats.cpk.toFixed(3) : 'N/A', 'Time': '', 'Shift': '', 'Interval': '', 'Value': '' } as any);
-    wsData.push({ '#' : 'UCL', 'Date': spcStats.ucl.toFixed(4), 'Time': '', 'Shift': '', 'Interval': '', 'Value': '' } as any);
-    wsData.push({ '#' : 'LCL', 'Date': spcStats.lcl.toFixed(4), 'Time': '', 'Shift': '', 'Interval': '', 'Value': '' } as any);
-
+    let wsData = [];
+    if (chartType === 'XBAR_R' && xbarStats) {
+      wsData = xbarStats.subgroups.map((sg) => ({
+        'Subgroup': sg.id,
+        'Size': sg.size,
+        'Mean (X-bar)': sg.xBar,
+        'Range (R)': sg.r,
+        'Values': sg.readings.map(r => r.value).join(', ')
+      }));
+    } else {
+      wsData = readings.map((r, i) => ({
+        '#': i + 1,
+        'Date': r.date,
+        'Time': new Date(r.timestamp).toLocaleTimeString(),
+        'Shift': r.shiftName,
+        'Interval': r.interval,
+        'Value': r.value
+      }));
+    }
+    
     const ws = XLSX.utils.json_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'SPC_Data');
@@ -331,16 +400,14 @@ export function SpcAnalysis() {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const handlePrint = () => { window.print(); };
 
   return (
     <div className="bg-[#f4f7fe] dark:bg-[var(--mantine-color-dark-8)] min-h-[calc(100vh-100px)] rounded-xl p-4 lg:p-6 pb-20">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-6 gap-4 print:hidden">
         <div>
           <Title order={2} size="h3">Statistical Process Control (SPC)</Title>
-          <Text c="dimmed" size="sm">Analyze parameter trends and statistical capabilities</Text>
+          <Text c="dimmed" size="sm">Monitor Process Stability and Variation</Text>
         </div>
         
         <Group>
@@ -412,9 +479,29 @@ export function SpcAnalysis() {
 
       {selectedParam && trendData ? (
         <>
+          {chartType === 'XBAR_R' && !isAttributeMode && xbarStats && (
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+              <KpiCard icon={Activity} iconColor="blue" title="Process Mean (X̄)" value={xbarStats.xDoubleBar.toFixed(3)} />
+              <KpiCard icon={Activity} iconColor="purple" title="Avg Range (R̄)" value={xbarStats.rBar.toFixed(3)} />
+              <KpiCard icon={Target} iconColor={xbarStats.cp !== null && xbarStats.cp < 1.33 ? "red" : "blue"} highlight={xbarStats.cp !== null && xbarStats.cp < 1.33} title="Cp" value={xbarStats.cp ? xbarStats.cp.toFixed(2) : 'N/A'} subtext={xbarStats.cp !== null && xbarStats.cp < 1.33 ? "(< 1.33)" : ""} />
+              <KpiCard icon={Shield} iconColor={xbarStats.cpk !== null && xbarStats.cpk < 1.33 ? "red" : "blue"} highlight={xbarStats.cpk !== null && xbarStats.cpk < 1.33} title="Cpk" value={xbarStats.cpk ? xbarStats.cpk.toFixed(2) : 'N/A'} subtext={xbarStats.cpk !== null && xbarStats.cpk < 1.33 ? "(< 1.33)" : ""} />
+              <KpiCard icon={Sigma} iconColor="blue" title="Process Sigma (σ)" value={xbarStats.sigma.toFixed(3)} subtext="(estimated)" />
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
             <div className={isFullView ? "lg:col-span-4" : "lg:col-span-3"}>
-              <Paper withBorder p="md" radius="lg" className="h-[500px] shadow-sm">
+              <Paper withBorder p="md" radius="lg" className="h-[650px] shadow-sm relative pt-12">
+                {chartType === 'XBAR_R' && !isAttributeMode && (
+                  <>
+                    <Badge size="lg" radius="xl" color="blue" variant="filled" className="absolute top-4 left-1/2 -translate-x-1/2 z-10 shadow-sm">
+                      X̄ - BAR CHART (Sample Mean)
+                    </Badge>
+                    <Badge size="lg" radius="xl" color="grape" variant="filled" className="absolute top-[52%] left-1/2 -translate-x-1/2 z-10 shadow-sm">
+                      R - BAR CHART (Sample Range)
+                    </Badge>
+                  </>
+                )}
                 <ReactECharts
                   ref={echartRef}
                   option={buildChartOption()}
@@ -426,7 +513,6 @@ export function SpcAnalysis() {
             {!isFullView && (
               <div className="lg:col-span-1 flex flex-col gap-4">
               <Title order={4} className="mb-0">Statistical Summary</Title>
-              
               {isAttributeMode ? (() => {
                 const totalN = readings.length;
                 const passed = readings.filter(r => {
@@ -436,125 +522,77 @@ export function SpcAnalysis() {
                 const yieldPct = totalN > 0 ? (passed / totalN) * 100 : 0;
                 
                 return (
-                  <Paper 
-                    withBorder 
-                    p="sm" 
-                    radius="md" 
-                    className={
-                      yieldPct < 95 ? 'bg-red-50 dark:bg-red-900/20 border-red-300' :
-                      yieldPct < 99.9 ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300' :
-                      'bg-blue-50 dark:bg-blue-900/20 border-blue-300'
-                    }
-                  >
-                    <div className={`flex gap-2 items-center ${
-                      yieldPct < 95 ? 'text-red-700 dark:text-red-400' :
-                      yieldPct < 99.9 ? 'text-amber-700 dark:text-amber-400' :
-                      'text-blue-700 dark:text-blue-400'
-                    }`}>
-                      {yieldPct < 95 ? <XCircle size={18} /> : yieldPct < 99.9 ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
-                      <Text size="sm" fw={700}>
-                        {yieldPct < 95 ? 'Fail (High Defect Rate)' : yieldPct < 99.9 ? 'Good (Minor Defects)' : 'Excellent (Zero Defects)'}
-                      </Text>
-                    </div>
-                    <Text size="xs" mt={4} className={
-                      yieldPct < 95 ? 'text-red-600 dark:text-red-300' :
-                      yieldPct < 99.9 ? 'text-amber-700 dark:text-amber-300' :
-                      'text-blue-600 dark:text-blue-300'
-                    }>
-                      {yieldPct < 95 
-                        ? 'Process yield is below 95%. Immediate action required.' 
-                        : yieldPct < 99.9 
-                        ? 'Process yield is good but experiencing some defects.' 
-                        : 'Process is operating perfectly with 100% yield.'}
-                    </Text>
+                  <Paper withBorder p="sm" radius="md" className={yieldPct < 95 ? 'bg-red-50 border-red-300' : 'bg-blue-50 border-blue-300'}>
+                    <Text size="sm" fw={700} className={yieldPct < 95 ? 'text-red-700' : 'text-blue-700'}>Yield: {yieldPct.toFixed(1)}%</Text>
                   </Paper>
                 );
               })() : spcStats.cpk !== null && (
-                <Paper 
-                  withBorder 
-                  p="sm" 
-                  radius="md" 
-                  className={
-                    spcStats.cpk < 1.0 ? 'bg-red-50 dark:bg-red-900/20 border-red-300' :
-                    spcStats.cpk < 1.33 ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300' :
-                    spcStats.cpk < 1.67 ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300' :
-                    'bg-blue-50 dark:bg-blue-900/20 border-blue-300'
-                  }
-                >
-                  <div className={`flex gap-2 items-center ${
-                    spcStats.cpk < 1.0 ? 'text-red-700 dark:text-red-400' :
-                    spcStats.cpk < 1.33 ? 'text-amber-700 dark:text-amber-400' :
-                    spcStats.cpk < 1.67 ? 'text-emerald-700 dark:text-emerald-400' :
-                    'text-blue-700 dark:text-blue-400'
-                  }`}>
-                    {spcStats.cpk < 1.0 ? <XCircle size={18} /> : spcStats.cpk < 1.33 ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
-                    <Text size="sm" fw={700}>
-                      {spcStats.cpk < 1.0 ? 'Fail (Incapable)' : spcStats.cpk < 1.33 ? 'Average (Needs Improvement)' : spcStats.cpk < 1.67 ? 'Good (Capable)' : 'Excellent (Highly Capable)'}
-                    </Text>
-                  </div>
-                  <Text size="xs" mt={4} className={
-                    spcStats.cpk < 1.0 ? 'text-red-600 dark:text-red-300' :
-                    spcStats.cpk < 1.33 ? 'text-amber-700 dark:text-amber-300' :
-                    spcStats.cpk < 1.67 ? 'text-emerald-600 dark:text-emerald-300' :
-                    'text-blue-600 dark:text-blue-300'
-                  }>
-                    {spcStats.cpk < 1.0 
-                      ? 'Cpk < 1.00. Process variation is wider than specification limits.' 
-                      : spcStats.cpk < 1.33 
-                      ? '1.00 ≤ Cpk < 1.33. Barely capable; variation should be reduced.' 
-                      : spcStats.cpk < 1.67
-                      ? '1.33 ≤ Cpk < 1.67. Meets quality requirements and is well centered.'
-                      : 'Cpk ≥ 1.67. Outstanding quality with very low defect rate.'}
-                  </Text>
+                <Paper withBorder p="sm" radius="md" className={spcStats.cpk < 1.33 ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-300'}>
+                    <div className="flex gap-2 items-center">
+                      <Text size="sm" fw={700}>{spcStats.cpk < 1.0 ? 'Incapable' : spcStats.cpk < 1.33 ? 'Needs Improvement' : 'Capable'}</Text>
+                    </div>
                 </Paper>
               )}
-
-              {isAttributeMode ? (
-                <SimpleGrid cols={2} spacing="md">
-                  <StatCard title="Total Sample N" value={readings.length} />
-                  <StatCard title="Total Passed" value={readings.filter(r => {
-                    const val = String(r.rawValue).trim().toLowerCase();
-                    return !(val === 'ng' || val === 'fail' || val === 'not ok' || val === 'not okay' || val === 'nok');
-                  }).length} />
-                  <StatCard title="Total Failed" value={readings.filter(r => {
-                    const val = String(r.rawValue).trim().toLowerCase();
-                    return (val === 'ng' || val === 'fail' || val === 'not ok' || val === 'not okay' || val === 'nok');
-                  }).length} />
-                  <StatCard title="Yield (FPY)" value={`${(readings.length > 0 ? (readings.filter(r => {
-                    const val = String(r.rawValue).trim().toLowerCase();
-                    return !(val === 'ng' || val === 'fail' || val === 'not ok' || val === 'not okay' || val === 'nok');
-                  }).length / readings.length) * 100 : 0).toFixed(1)}%`} />
-                  <StatCard title="Defect Rate" value={`${(readings.length > 0 ? (readings.filter(r => {
-                    const val = String(r.rawValue).trim().toLowerCase();
-                    return (val === 'ng' || val === 'fail' || val === 'not ok' || val === 'not okay' || val === 'nok');
-                  }).length / readings.length) * 100 : 0).toFixed(1)}%`} />
-                </SimpleGrid>
-              ) : (
-                <SimpleGrid cols={2} spacing="md">
-                  <StatCard title="Cp" value={spcStats.cp ? spcStats.cp.toFixed(3) : 'N/A'} />
-                  <StatCard title="Cpk" value={spcStats.cpk ? spcStats.cpk.toFixed(3) : 'N/A'} />
-                  <StatCard title="Mean (X̄)" value={spcStats.mean.toFixed(3)} />
-                  <StatCard title="Std Dev (σ)" value={spcStats.sigma.toFixed(4)} />
-                  <StatCard title="UCL" value={spcStats.ucl.toFixed(3)} />
-                  <StatCard title="LCL" value={spcStats.lcl.toFixed(3)} />
-                  <StatCard title="Max" value={spcStats.max} />
-                  <StatCard title="Min" value={spcStats.min} />
-                  <StatCard title="Sample N" value={spcStats.n} />
-                </SimpleGrid>
-              )}
+                {chartType === 'XBAR_R' && xbarStats ? (
+                  <SimpleGrid cols={2} spacing="md">
+                    <StatCard title="Subgroups" value={xbarStats.subgroups.length} />
+                    <StatCard title="Total N" value={readings.length} />
+                    <StatCard title="X-bar UCL" value={xbarStats.xBarUcl.toFixed(3)} />
+                    <StatCard title="X-bar LCL" value={xbarStats.xBarLcl.toFixed(3)} />
+                    <StatCard title="R UCL" value={xbarStats.rUcl.toFixed(3)} />
+                    <StatCard title="R LCL" value={xbarStats.rLcl.toFixed(3)} />
+                  </SimpleGrid>
+                ) : (
+                  <SimpleGrid cols={2} spacing="md">
+                    <StatCard title="Cp" value={spcStats.cp ? spcStats.cp.toFixed(3) : 'N/A'} />
+                    <StatCard title="Cpk" value={spcStats.cpk ? spcStats.cpk.toFixed(3) : 'N/A'} />
+                    <StatCard title="Mean (X̄)" value={spcStats.mean.toFixed(3)} />
+                    <StatCard title="Std Dev (σ)" value={spcStats.sigma.toFixed(4)} />
+                    <StatCard title="UCL" value={spcStats.ucl.toFixed(3)} />
+                    <StatCard title="LCL" value={spcStats.lcl.toFixed(3)} />
+                  </SimpleGrid>
+                )}
               </div>
             )}
           </div>
 
           <Modal opened={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} title="Chart Configuration & Calculations" centered size="lg">
             <div className="space-y-4">
-              <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md border border-gray-200 dark:border-gray-700">
-                <Text fw={600} size="sm" mb="xs">Cp & Cpk Formulas</Text>
-                <Text size="xs" className="font-mono text-gray-700 dark:text-gray-300">
-                  Cp = (USL - LSL) / 6σ<br/>
-                  Cpk = min( (USL - Mean) / 3σ, (Mean - LSL) / 3σ )
-                </Text>
-              </div>
+              <Select
+                label="Chart Type"
+                data={[
+                  { value: 'XBAR_R', label: 'X-bar & R Chart (Professional)' },
+                  { value: 'I', label: 'Individuals Chart (Classic)' }
+                ]}
+                value={chartType}
+                onChange={(v) => setChartType(v as any)}
+                disabled={isAttributeMode}
+              />
+              
+              {chartType === 'XBAR_R' && !isAttributeMode && (
+                <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-md border border-blue-100 dark:border-blue-900 mb-4">
+                  <Select
+                    label="Subgroup Strategy"
+                    data={[
+                      { value: 'FIXED', label: 'Fixed Size (Consecutive Parts)' },
+                      { value: 'SHIFT', label: 'Group By Shift' }
+                    ]}
+                    value={subgroupStrategy}
+                    onChange={(v) => setSubgroupStrategy(v as any)}
+                    mb="sm"
+                  />
+                  {subgroupStrategy === 'FIXED' && (
+                    <NumberInput
+                      label="Subgroup Size (n)"
+                      description="Usually between 2 and 5"
+                      min={2}
+                      max={10}
+                      value={subgroupSize}
+                      onChange={(v) => setSubgroupSize(v as number)}
+                    />
+                  )}
+                </div>
+              )}
 
               <Text fw={600} size="sm" mt="md">Overrides & Customization</Text>
               <SimpleGrid cols={2} spacing="md">
@@ -570,46 +608,19 @@ export function SpcAnalysis() {
                   value={customLsl}
                   onChange={(v) => setCustomLsl(v as number | '')}
                 />
-                <NumberInput
-                  label="Custom Sigma (σ)"
-                  placeholder="Calculated automatically"
-                  value={customSigma}
-                  onChange={(v) => setCustomSigma(v as number | '')}
-                  decimalScale={6}
-                />
               </SimpleGrid>
 
-              <Select
-                label="Control Limit Calculation"
-                description="Choose how UCL and LCL are calculated"
-                data={[
-                  { value: 'STATISTICAL', label: 'Statistical Limits (Mean ± 3σ)' },
-                  { value: 'FIXED', label: 'Fixed Tolerance (70% of Spec Band)' }
-                ]}
-                value={calcMethod}
-                onChange={(v) => setCalcMethod(v as any)}
-              />
-              
-              <div className="border-t border-gray-200 dark:border-gray-800 pt-4 mt-4">
-                <Text fw={600} size="sm" mb="md">Display Options</Text>
-                <Switch 
-                  label="Show Statistical Mean (Center Line)" 
-                  checked={showMean} 
-                  onChange={(e) => setShowMean(e.currentTarget.checked)} 
-                  mb="sm"
+              {chartType === 'I' && (
+                <Select
+                  label="Control Limit Calculation"
+                  data={[
+                    { value: 'STATISTICAL', label: 'Statistical Limits (Mean ± 3σ)' },
+                    { value: 'FIXED', label: 'Fixed Tolerance (70% of Spec Band)' }
+                  ]}
+                  value={calcMethod}
+                  onChange={(v) => setCalcMethod(v as any)}
                 />
-                <Switch 
-                  label="Show Control Limits (UCL / LCL)" 
-                  checked={showUclLcl} 
-                  onChange={(e) => setShowUclLcl(e.currentTarget.checked)} 
-                  mb="sm"
-                />
-                <Switch 
-                  label="Show Specification Limits (USL / LSL)" 
-                  checked={showSpecLimits} 
-                  onChange={(e) => setShowSpecLimits(e.currentTarget.checked)} 
-                />
-              </div>
+              )}
             </div>
           </Modal>
         </>

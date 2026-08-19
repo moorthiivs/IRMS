@@ -240,8 +240,93 @@ export class SpcService {
     return !!existing;
   }
 
+  async getMonthlyStatus(year: number, month: number, partId: string, operationId: string, mcNo: string) {
+    if (!partId || !operationId || !mcNo) return {};
+
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+    const today = new Date();
+
+    const shifts = await this.prisma.shift.findMany();
+
+    // Dynamically calculate expected intervals per shift
+    const parameters = await this.prisma.inspectionParameter.findMany({
+      where: { partId, operationId }
+    });
+
+    let maxIntervalsPerShift = 1; // Default fallback
+    if (parameters.length > 0) {
+      maxIntervalsPerShift = 0;
+      for (const param of parameters) {
+        if (param.frequencyUnit === 'day' || param.frequencyUnit === 'Day-wise') {
+          continue;
+        }
+        
+        let target = 1;
+        const freqStr = String(param.freqOfInspn || '').toLowerCase().trim();
+        const parsedFreq = parseInt(freqStr.replace(/\D/g, ''), 10);
+        if (!isNaN(parsedFreq) && parsedFreq > 0) {
+          target = parsedFreq;
+        }
+        
+        if (target > maxIntervalsPerShift) {
+          maxIntervalsPerShift = target;
+        }
+      }
+    }
+
+    const expectedPerDay = maxIntervalsPerShift === 0 ? 1 : shifts.length * maxIntervalsPerShift;
+
+    const transactions = await this.prisma.spcTransaction.findMany({
+      where: {
+        partId,
+        operationId,
+        mcNo,
+        inspectionTimestamp: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        inspectionTimestamp: true,
+      },
+    });
+
+    const statusMap: Record<string, 'COMPLETE' | 'PARTIAL' | 'MISSING'> = {};
+    const countsPerDay: Record<string, number> = {};
+
+    transactions.forEach(tx => {
+      const dateStr = `${tx.inspectionTimestamp.getFullYear()}-${String(tx.inspectionTimestamp.getMonth() + 1).padStart(2, '0')}-${String(tx.inspectionTimestamp.getDate()).padStart(2, '0')}`;
+      countsPerDay[dateStr] = (countsPerDay[dateStr] || 0) + 1;
+    });
+
+    const daysInMonth = endDate.getDate();
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month - 1, day);
+      if (date > today) continue;
+
+      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const count = countsPerDay[dateStr] || 0;
+
+      if (count >= expectedPerDay) {
+        statusMap[dateStr] = 'COMPLETE';
+      } else if (count > 0) {
+        statusMap[dateStr] = 'PARTIAL';
+      } else {
+        statusMap[dateStr] = 'MISSING';
+      }
+    }
+
+    return statusMap;
+  }
+
   async createSpcTransaction(userId: string, dto: any) {
-    const { shiftId, partId, operationId, lotNumber, mcNo, intervalName, remarks, details } = dto;
+    const { shiftId, partId, operationId, lotNumber, mcNo, intervalName, remarks, details, entryDate, operatorId } = dto;
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const isAdmin = user?.role === 'ADMIN';
+    const finalInspectorId = (isAdmin && operatorId) ? operatorId : userId;
+    const finalDate = (isAdmin && entryDate) ? new Date(entryDate) : new Date();
 
     const part = await this.prisma.part.findUnique({
       where: { id: partId },
@@ -284,7 +369,8 @@ export class SpcService {
 
     const transaction = await this.prisma.spcTransaction.create({
       data: {
-        inspectorId: userId,
+        inspectorId: finalInspectorId,
+        inspectionTimestamp: finalDate,
         shiftId: shiftId || null,
         partId,
         operationId,
@@ -481,6 +567,7 @@ export class SpcService {
     target?: number;
     sampleValues: number[];
     batchLot?: string;
+    timestamp?: string | Date;
   }>) {
     if (!records || !records.length) {
       throw new BadRequestException('No SPC records provided for upload.');
@@ -506,6 +593,7 @@ export class SpcService {
           target: record.target || null,
           sampleValues: JSON.stringify(record.sampleValues || []),
           batchLot: record.batchLot || null,
+          ...(record.timestamp ? { timestamp: new Date(record.timestamp) } : {}),
         },
       });
       createdRecords.push(spcRecord);
