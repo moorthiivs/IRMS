@@ -1,0 +1,305 @@
+name: Build and Deploy IRMS to AWS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: irms-production
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy IRMS
+    runs-on: ubuntu-latest
+
+    steps:
+      # ============================================================
+      # CHECKOUT
+      # ============================================================
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # ============================================================
+      # NODE
+      # ============================================================
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+
+      # ============================================================
+      # JAVA / ANDROID
+      # ============================================================
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # ============================================================
+      # FRONTEND
+      # ============================================================
+
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm install
+
+      - name: Build Frontend Web App
+        working-directory: ./frontend
+        env:
+          VITE_APP_VERSION: ${{ github.sha }}
+        run: npm run build
+
+      # ============================================================
+      # CAPACITOR / ANDROID APK
+      # ============================================================
+
+      - name: Sync Capacitor
+        working-directory: ./frontend
+        run: npx cap sync android
+
+      - name: Make Gradle Executable
+        working-directory: ./frontend/android
+        run: chmod +x gradlew
+
+      - name: Build Android APK
+        working-directory: ./frontend/android
+        run: ./gradlew assembleDebug
+
+      - name: Copy APK to Web App
+        run: |
+          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk \
+             frontend/dist/irms.apk
+
+      # ============================================================
+      # BACKEND
+      # ============================================================
+
+      - name: Install Backend Dependencies
+        working-directory: ./backend
+        run: npm install
+
+      - name: Build Backend
+        working-directory: ./backend
+        run: npm run build
+
+      # ============================================================
+      # CREATE DEPLOYMENT CONTENT
+      # ============================================================
+
+      - name: Prepare Deployment Artifact
+        run: |
+          set -e
+
+          echo "Preparing IRMS deployment..."
+
+          # Frontend → NestJS client directory
+          rm -rf backend/client
+          mkdir -p backend/client
+
+          cp -R frontend/dist/. backend/client/
+
+          # Version information
+          echo "{\"version\":\"${{ github.sha }}\"}" \
+            > backend/client/version.json
+
+          # OTA update package
+          cd backend/client
+          zip -r update.zip . -x "update.zip"
+
+          cd ../..
+
+          # Deployment package
+          cd backend
+
+          zip -r ../irms-${{ github.sha }}.zip \
+            dist \
+            client \
+            prisma \
+            node_modules \
+            package.json \
+            package-lock.json \
+            .puppeteerrc.cjs \
+            tsconfig.json \
+            tsconfig.build.json
+
+          cd ..
+
+          echo "Deployment package:"
+          ls -lh irms-${{ github.sha }}.zip
+
+      # ============================================================
+      # SSH
+      # ============================================================
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "${{ secrets.AWS_SSH_KEY }}" \
+            > ~/.ssh/github_actions
+
+          chmod 600 ~/.ssh/github_actions
+
+          printf '%s\n' "${{ secrets.AWS_KNOWN_HOSTS }}" \
+            > ~/.ssh/known_hosts
+
+          chmod 644 ~/.ssh/known_hosts
+
+      # ============================================================
+      # UPLOAD
+      # ============================================================
+
+      - name: Upload Deployment Package
+        run: |
+          scp \
+            -i ~/.ssh/github_actions \
+            -o StrictHostKeyChecking=yes \
+            irms-${{ github.sha }}.zip \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:/tmp/
+
+      # ============================================================
+      # DEPLOY ON EC2
+      # ============================================================
+
+      - name: Deploy IRMS on AWS
+        run: |
+          ssh \
+            -i ~/.ssh/github_actions \
+            -o StrictHostKeyChecking=yes \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} \
+            "GITHUB_SHA=${{ github.sha }} bash -s" <<'REMOTE_SCRIPT'
+
+          set -e
+
+          APP_NAME="irms"
+          APP_DIR="/srv/apps/irms"
+          RELEASE_DIR="$APP_DIR/releases/$GITHUB_SHA"
+          PACKAGE="/tmp/irms-$GITHUB_SHA.zip"
+          PM2_NAME="irms-api"
+
+          echo "=========================================="
+          echo "Deploying IRMS"
+          echo "Commit: $GITHUB_SHA"
+          echo "Release: $RELEASE_DIR"
+          echo "=========================================="
+
+          # ----------------------------------------------------------
+          # Create release directory
+          # ----------------------------------------------------------
+
+          mkdir -p "$RELEASE_DIR"
+
+          # ----------------------------------------------------------
+          # Extract deployment
+          # ----------------------------------------------------------
+
+          unzip -q "$PACKAGE" -d "$RELEASE_DIR"
+
+          # ----------------------------------------------------------
+          # Verify release
+          # ----------------------------------------------------------
+
+          test -f "$RELEASE_DIR/dist/main.js"
+          test -f "$RELEASE_DIR/package.json"
+          test -f "$RELEASE_DIR/client/index.html"
+
+          echo "Release verified."
+
+          # ----------------------------------------------------------
+          # Attach production environment
+          # ----------------------------------------------------------
+
+          ln -sfn "$APP_DIR/shared/.env" \
+            "$RELEASE_DIR/.env"
+
+          # ----------------------------------------------------------
+          # Switch current release
+          # ----------------------------------------------------------
+
+          ln -sfn "$RELEASE_DIR" \
+            "$APP_DIR/current"
+
+          # ----------------------------------------------------------
+          # Load production environment
+          # ----------------------------------------------------------
+
+          set -a
+          source "$APP_DIR/shared/.env"
+          set +a
+
+          # ----------------------------------------------------------
+          # Restart / Start PM2
+          # ----------------------------------------------------------
+
+          cd "$APP_DIR/current"
+
+          if pm2 describe "$PM2_NAME" > /dev/null 2>&1; then
+            echo "Restarting $PM2_NAME..."
+            pm2 restart "$PM2_NAME" --update-env
+          else
+            echo "Starting $PM2_NAME..."
+
+            pm2 start dist/main.js \
+              --name "$PM2_NAME" \
+              --cwd "$APP_DIR/current"
+          fi
+
+          # ----------------------------------------------------------
+          # Save PM2 process list
+          # ----------------------------------------------------------
+
+          pm2 save
+
+          # ----------------------------------------------------------
+          # Cleanup uploaded package
+          # ----------------------------------------------------------
+
+          rm -f "$PACKAGE"
+
+          # ----------------------------------------------------------
+          # Keep latest 5 releases
+          # ----------------------------------------------------------
+
+          cd "$APP_DIR/releases"
+
+          ls -1dt */ 2>/dev/null \
+            | tail -n +6 \
+            | xargs -r rm -rf
+
+          # ----------------------------------------------------------
+          # Deployment verification
+          # ----------------------------------------------------------
+
+          echo "=========================================="
+          echo "PM2 STATUS"
+          echo "=========================================="
+
+          pm2 status
+
+          echo "=========================================="
+          echo "CURRENT RELEASE"
+          echo "=========================================="
+
+          readlink -f "$APP_DIR/current"
+
+          echo "=========================================="
+          echo "IRMS DEPLOYMENT COMPLETED"
+          echo "=========================================="
+
+          REMOTE_SCRIPT
