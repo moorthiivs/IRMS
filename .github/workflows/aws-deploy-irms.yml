@@ -19,14 +19,15 @@ jobs:
     steps:
 
       # ============================================================
-      # CHECKOUT
+      # 1. CHECKOUT
       # ============================================================
 
       - name: Checkout Code
         uses: actions/checkout@v4
 
+
       # ============================================================
-      # NODE
+      # 2. NODE.JS
       # ============================================================
 
       - name: Setup Node.js
@@ -38,8 +39,9 @@ jobs:
             frontend/package-lock.json
             backend/package-lock.json
 
+
       # ============================================================
-      # JAVA / ANDROID
+      # 3. JAVA
       # ============================================================
 
       - name: Setup Java
@@ -48,122 +50,310 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
 
+
+      # ============================================================
+      # 4. ANDROID SDK
+      # ============================================================
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
         with:
           packages: 'platform-tools'
 
+
       # ============================================================
-      # FRONTEND
+      # 5. GRADLE CACHE
+      # ============================================================
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+
+      # ============================================================
+      # 6. FRONTEND INSTALL
       # ============================================================
 
       - name: Install Frontend Dependencies
         working-directory: ./frontend
+        shell: bash
         run: |
           set -e
+
+          echo "=========================================="
+          echo "Installing frontend dependencies"
+          echo "=========================================="
+
           npm install
+
+
+      # ============================================================
+      # 7. FRONTEND BUILD
+      # ============================================================
 
       - name: Build Frontend Web App
         working-directory: ./frontend
         env:
           VITE_APP_VERSION: ${{ github.sha }}
+        shell: bash
         run: |
           set -e
+
+          echo "=========================================="
+          echo "Building frontend"
+          echo "=========================================="
+
           npm run build
 
+          echo ""
+          echo "Frontend build completed."
+
+          test -d dist
+          test -f dist/index.html
+
+          echo ""
+          echo "Frontend dist:"
+          du -sh dist
+
+
       # ============================================================
-      # CAPACITOR / ANDROID APK
+      # 8. CAPACITOR SYNC
       # ============================================================
 
       - name: Sync Capacitor
         working-directory: ./frontend
+        shell: bash
         run: |
           set -e
+
+          echo "=========================================="
+          echo "Syncing Capacitor Android project"
+          echo "=========================================="
+
           npx cap sync android
+
+
+      # ============================================================
+      # 9. GRADLE PERMISSION
+      # ============================================================
 
       - name: Make Gradle Executable
         working-directory: ./frontend/android
+        shell: bash
         run: |
           set -e
+
           chmod +x gradlew
+
+          echo "Gradle wrapper permissions:"
+          ls -l gradlew
+
+
+      # ============================================================
+      # 10. CHECK GRADLE VERSION
+      #     Includes retry because GitHub/Gradle download
+      #     occasionally returns HTTP 500.
+      # ============================================================
+
+      - name: Prepare Gradle
+        working-directory: ./frontend/android
+        shell: bash
+        run: |
+          set -e
+
+          echo "=========================================="
+          echo "Gradle wrapper configuration"
+          echo "=========================================="
+
+          cat gradle/wrapper/gradle-wrapper.properties
+
+          echo ""
+          echo "=========================================="
+          echo "Preparing Gradle"
+          echo "=========================================="
+
+          SUCCESS=false
+
+          for attempt in 1 2 3 4 5; do
+
+            echo ""
+            echo "------------------------------------------"
+            echo "Gradle attempt $attempt / 5"
+            echo "------------------------------------------"
+
+            if ./gradlew --version; then
+              SUCCESS=true
+              echo ""
+              echo "Gradle is ready."
+              break
+            fi
+
+            if [ "$attempt" -lt 5 ]; then
+              echo ""
+              echo "Gradle download failed."
+              echo "Waiting 15 seconds before retry..."
+              sleep 15
+            fi
+
+          done
+
+          if [ "$SUCCESS" != "true" ]; then
+            echo ""
+            echo "=========================================="
+            echo "ERROR"
+            echo "=========================================="
+            echo "Gradle distribution could not be downloaded"
+            echo "after 5 attempts."
+            exit 1
+          fi
+
+
+      # ============================================================
+      # 11. BUILD ANDROID APK
+      # ============================================================
 
       - name: Build Android APK
         working-directory: ./frontend/android
+        shell: bash
         run: |
           set -e
-          ./gradlew assembleDebug
+
+          echo "=========================================="
+          echo "Building Android APK"
+          echo "=========================================="
+
+          ./gradlew assembleDebug \
+            --no-daemon \
+            --stacktrace
+
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+
+          test -f "$APK"
+
+          echo ""
+          echo "=========================================="
+          echo "APK BUILD SUCCESSFUL"
+          echo "=========================================="
+
+          ls -lh "$APK"
+
+
+      # ============================================================
+      # 12. COPY APK INTO WEB APP
+      # ============================================================
 
       - name: Copy APK to Web App
+        shell: bash
         run: |
           set -e
 
           APK="frontend/android/app/build/outputs/apk/debug/app-debug.apk"
 
+          echo "=========================================="
+          echo "Copying APK into frontend/dist"
+          echo "=========================================="
+
           test -f "$APK"
+          test -d frontend/dist
 
           cp "$APK" frontend/dist/irms.apk
 
+          echo ""
           echo "APK copied successfully:"
           ls -lh frontend/dist/irms.apk
 
+
       # ============================================================
-      # BACKEND
+      # 13. BACKEND INSTALL
       # ============================================================
 
       - name: Install Backend Dependencies
         working-directory: ./backend
+        shell: bash
         run: |
           set -e
+
+          echo "=========================================="
+          echo "Installing backend dependencies"
+          echo "=========================================="
+
           npm install
+
+
+      # ============================================================
+      # 14. BACKEND BUILD
+      # ============================================================
 
       - name: Build Backend
         working-directory: ./backend
+        shell: bash
         run: |
           set -e
+
+          echo "=========================================="
+          echo "Building backend"
+          echo "=========================================="
+
           npm run build
 
+          echo ""
+          echo "Backend build completed."
+
+          test -f dist/main.js
+
+          echo ""
+          echo "Backend dist:"
+          du -sh dist
+
+
       # ============================================================
-      # CREATE DEPLOYMENT CONTENT
+      # 15. PREPARE DEPLOYMENT ARTIFACT
       # ============================================================
 
       - name: Prepare Deployment Artifact
+        shell: bash
         run: |
           set -e
 
           echo "=========================================="
-          echo "Preparing IRMS deployment artifact"
-          echo "Commit: ${{ github.sha }}"
+          echo "PREPARING IRMS DEPLOYMENT PACKAGE"
           echo "=========================================="
 
-          # --------------------------------------------------------
-          # Frontend -> NestJS client directory
-          # --------------------------------------------------------
+          echo "Commit:"
+          echo "${{ github.sha }}"
 
+          echo ""
+          echo "Cleaning previous backend/client..."
           rm -rf backend/client
+
           mkdir -p backend/client
+
+          echo ""
+          echo "Copying frontend build..."
 
           cp -R frontend/dist/. backend/client/
 
-          # --------------------------------------------------------
-          # Version information
-          # --------------------------------------------------------
+          echo ""
+          echo "Creating version.json..."
 
           echo '{"version":"${{ github.sha }}"}' \
             > backend/client/version.json
 
-          # --------------------------------------------------------
-          # OTA update package
-          # --------------------------------------------------------
+          echo ""
+          echo "Frontend deployment contents:"
+          du -sh backend/client
+
+          echo ""
+          echo "Creating client/update.zip..."
 
           cd backend/client
 
-          zip -r update.zip . -x "update.zip"
+          zip -r update.zip . \
+            -x "update.zip"
 
           cd ../..
 
-          # --------------------------------------------------------
-          # Main deployment package
-          # --------------------------------------------------------
+          echo ""
+          echo "Creating main deployment package..."
 
           cd backend
 
@@ -180,18 +370,14 @@ jobs:
 
           cd ..
 
-          # --------------------------------------------------------
-          # Validate package
-          # --------------------------------------------------------
-
           PACKAGE="irms-${{ github.sha }}.zip"
-
-          test -f "$PACKAGE"
 
           echo ""
           echo "=========================================="
-          echo "DEPLOYMENT PACKAGE"
+          echo "DEPLOYMENT PACKAGE CREATED"
           echo "=========================================="
+
+          test -f "$PACKAGE"
 
           ls -lh "$PACKAGE"
 
@@ -199,8 +385,9 @@ jobs:
           echo "Package size:"
           du -h "$PACKAGE"
 
+
       # ============================================================
-      # CONFIGURE SSH
+      # 16. CONFIGURE SSH
       # ============================================================
 
       - name: Configure SSH
@@ -211,29 +398,45 @@ jobs:
         run: |
           set -e
 
+          echo "=========================================="
+          echo "Configuring SSH"
+          echo "=========================================="
+
           mkdir -p ~/.ssh
+
           chmod 700 ~/.ssh
 
-          printf '%s\n' "$AWS_SSH_KEY" > ~/.ssh/github_actions
+          printf '%s\n' "$AWS_SSH_KEY" \
+            > ~/.ssh/github_actions
 
           chmod 600 ~/.ssh/github_actions
 
-          printf '%s\n' "$AWS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$AWS_KNOWN_HOSTS" \
+            > ~/.ssh/known_hosts
 
           chmod 644 ~/.ssh/known_hosts
 
-          echo "SSH configuration created."
+          test -f ~/.ssh/github_actions
+          test -s ~/.ssh/known_hosts
+
+          echo "SSH configuration completed."
+
 
       # ============================================================
-      # VERIFY AWS CONFIGURATION
+      # 17. VERIFY AWS SECRETS
       # ============================================================
 
       - name: Verify AWS Deployment Configuration
         env:
           AWS_HOST: ${{ secrets.AWS_HOST }}
           AWS_USER: ${{ secrets.AWS_USER }}
+        shell: bash
         run: |
           set -e
+
+          echo "=========================================="
+          echo "Checking AWS deployment configuration"
+          echo "=========================================="
 
           test -n "$AWS_HOST" || {
             echo "ERROR: AWS_HOST secret is missing"
@@ -246,123 +449,190 @@ jobs:
           }
 
           test -f ~/.ssh/github_actions || {
-            echo "ERROR: SSH private key was not created"
+            echo "ERROR: SSH private key is missing"
             exit 1
           }
 
           test -s ~/.ssh/known_hosts || {
-            echo "ERROR: known_hosts is empty"
+            echo "ERROR: AWS_KNOWN_HOSTS is empty"
             exit 1
           }
 
           echo "AWS deployment configuration is present."
 
+
       # ============================================================
-      # TEST SSH CONNECTION
+      # 18. TEST SSH
       # ============================================================
 
       - name: Test SSH Connection
         env:
           AWS_HOST: ${{ secrets.AWS_HOST }}
           AWS_USER: ${{ secrets.AWS_USER }}
+        shell: bash
         run: |
           set -e
+
+          echo "=========================================="
+          echo "Testing SSH connection"
+          echo "=========================================="
 
           ssh \
             -i ~/.ssh/github_actions \
             -o StrictHostKeyChecking=yes \
             -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=3 \
             "${AWS_USER}@${AWS_HOST}" \
             "echo 'SSH connection successful'"
 
+          echo "SSH test successful."
+
+
       # ============================================================
-      # PREPARE EC2 DEPLOYMENT DIRECTORY
+      # 19. PREPARE EC2 DEPLOYMENT DIRECTORY
+      #
+      # IMPORTANT:
+      # Do NOT use /tmp.
+      #
+      # /tmp on this EC2 is tmpfs and only ~455 MB.
+      # IRMS package can be ~385 MB.
+      #
+      # /home/ubuntu/deploy uses the main 96 GB disk.
       # ============================================================
 
       - name: Prepare EC2 Deployment Directory
         env:
           AWS_HOST: ${{ secrets.AWS_HOST }}
           AWS_USER: ${{ secrets.AWS_USER }}
+        shell: bash
         run: |
           set -e
+
+          echo "=========================================="
+          echo "Preparing EC2 deployment directory"
+          echo "=========================================="
 
           ssh \
             -i ~/.ssh/github_actions \
             -o StrictHostKeyChecking=yes \
             "${AWS_USER}@${AWS_HOST}" \
-            "mkdir -p /home/ubuntu/deploy && chmod 700 /home/ubuntu/deploy"
+            "
+              mkdir -p /home/ubuntu/deploy &&
+              chmod 700 /home/ubuntu/deploy &&
+              df -h /home/ubuntu/deploy
+            "
+
 
       # ============================================================
-      # UPLOAD DEPLOYMENT PACKAGE
+      # 20. UPLOAD PACKAGE
+      #
+      # Upload to /home/ubuntu/deploy instead of /tmp.
       # ============================================================
 
       - name: Upload Deployment Package
         env:
           AWS_HOST: ${{ secrets.AWS_HOST }}
           AWS_USER: ${{ secrets.AWS_USER }}
+        shell: bash
         run: |
           set -e
 
           PACKAGE="irms-${{ github.sha }}.zip"
 
+          echo "=========================================="
+          echo "UPLOADING IRMS PACKAGE"
+          echo "=========================================="
+
           test -f "$PACKAGE"
 
-          echo "Uploading:"
+          echo "Local package:"
           ls -lh "$PACKAGE"
+
+          echo ""
+          echo "Uploading to:"
+          echo "/home/ubuntu/deploy/$PACKAGE"
 
           scp \
             -i ~/.ssh/github_actions \
             -o StrictHostKeyChecking=yes \
             -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=3 \
             "$PACKAGE" \
             "${AWS_USER}@${AWS_HOST}:/home/ubuntu/deploy/"
 
+          echo ""
           echo "Upload completed successfully."
 
+
       # ============================================================
-      # VERIFY UPLOAD
+      # 21. VERIFY UPLOAD
       # ============================================================
 
       - name: Verify Uploaded Package
         env:
           AWS_HOST: ${{ secrets.AWS_HOST }}
           AWS_USER: ${{ secrets.AWS_USER }}
+        shell: bash
         run: |
           set -e
+
+          PACKAGE="irms-${{ github.sha }}.zip"
+
+          echo "=========================================="
+          echo "VERIFYING UPLOAD"
+          echo "=========================================="
 
           ssh \
             -i ~/.ssh/github_actions \
             -o StrictHostKeyChecking=yes \
             "${AWS_USER}@${AWS_HOST}" \
-            "ls -lh /home/ubuntu/deploy/irms-${{ github.sha }}.zip"
+            "
+              test -f /home/ubuntu/deploy/$PACKAGE &&
+              ls -lh /home/ubuntu/deploy/$PACKAGE
+            "
+
+          echo "Upload verification successful."
+
 
       # ============================================================
-      # DEPLOY ON EC2
+      # 22. DEPLOY ON EC2
       # ============================================================
 
       - name: Deploy IRMS on AWS
         env:
           AWS_HOST: ${{ secrets.AWS_HOST }}
           AWS_USER: ${{ secrets.AWS_USER }}
+        shell: bash
         run: |
           set -e
+
+          echo "=========================================="
+          echo "STARTING IRMS DEPLOYMENT"
+          echo "=========================================="
 
           ssh \
             -i ~/.ssh/github_actions \
             -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=3 \
             "${AWS_USER}@${AWS_HOST}" \
             "GITHUB_SHA=${{ github.sha }} bash -s" <<'REMOTE_SCRIPT'
 
           set -e
 
           # ========================================================
-          # APPLICATION VARIABLES
+          # APPLICATION CONFIG
           # ========================================================
 
           APP_NAME="irms"
+
           APP_DIR="/srv/apps/irms"
 
           RELEASES_DIR="$APP_DIR/releases"
+
           SHARED_DIR="$APP_DIR/shared"
 
           RELEASE_DIR="$RELEASES_DIR/$GITHUB_SHA"
@@ -371,90 +641,168 @@ jobs:
 
           PM2_NAME="irms-api"
 
+
           # ========================================================
-          # START
+          # DEPLOYMENT INFORMATION
           # ========================================================
 
           echo ""
           echo "=========================================="
           echo "IRMS AWS DEPLOYMENT"
           echo "=========================================="
-          echo "Commit:       $GITHUB_SHA"
-          echo "Application:  $APP_NAME"
-          echo "Release:      $RELEASE_DIR"
-          echo "Package:      $PACKAGE"
+
+          echo "Commit:"
+          echo "$GITHUB_SHA"
+
+          echo ""
+
+          echo "Application:"
+          echo "$APP_NAME"
+
+          echo ""
+
+          echo "Application directory:"
+          echo "$APP_DIR"
+
+          echo ""
+
+          echo "Release:"
+          echo "$RELEASE_DIR"
+
+          echo ""
+
+          echo "Package:"
+          echo "$PACKAGE"
+
           echo "=========================================="
 
+
           # ========================================================
-          # VALIDATE PACKAGE
+          # VERIFY PACKAGE
           # ========================================================
+
+          echo ""
+          echo "Checking deployment package..."
 
           test -f "$PACKAGE"
 
-          echo "Deployment package found:"
           ls -lh "$PACKAGE"
 
+
           # ========================================================
-          # CREATE APPLICATION DIRECTORIES
+          # CREATE DIRECTORIES
           # ========================================================
 
+          echo ""
+          echo "Creating application directories..."
+
           mkdir -p "$RELEASES_DIR"
+
           mkdir -p "$SHARED_DIR"
+
 
           # ========================================================
           # CREATE RELEASE DIRECTORY
           # ========================================================
 
+          echo ""
+          echo "Preparing release directory..."
+
           rm -rf "$RELEASE_DIR"
 
           mkdir -p "$RELEASE_DIR"
 
+
           # ========================================================
-          # EXTRACT
+          # EXTRACT PACKAGE
           # ========================================================
 
+          echo ""
           echo "Extracting deployment package..."
 
-          unzip -q "$PACKAGE" -d "$RELEASE_DIR"
+          unzip -q "$PACKAGE" \
+            -d "$RELEASE_DIR"
+
 
           # ========================================================
           # VERIFY RELEASE
           # ========================================================
 
+          echo ""
           echo "Verifying release..."
 
           test -f "$RELEASE_DIR/dist/main.js"
+
           test -f "$RELEASE_DIR/package.json"
+
           test -f "$RELEASE_DIR/client/index.html"
 
+          test -d "$RELEASE_DIR/node_modules"
+
+          echo ""
           echo "Release verification successful."
 
+
           # ========================================================
-          # PRODUCTION ENVIRONMENT
+          # VERIFY PRODUCTION ENVIRONMENT
           # ========================================================
 
-          test -f "$SHARED_DIR/.env"
+          echo ""
+          echo "Checking production environment..."
+
+          if [ ! -f "$SHARED_DIR/.env" ]; then
+
+            echo ""
+            echo "ERROR:"
+            echo "$SHARED_DIR/.env does not exist."
+
+            echo ""
+            echo "Create the production environment file first:"
+
+            echo "$SHARED_DIR/.env"
+
+            exit 1
+
+          fi
+
+          chmod 600 "$SHARED_DIR/.env"
+
+
+          # ========================================================
+          # LINK .ENV
+          # ========================================================
+
+          echo ""
+          echo "Linking production .env..."
 
           ln -sfn \
             "$SHARED_DIR/.env" \
             "$RELEASE_DIR/.env"
 
-          echo "Production environment linked."
 
           # ========================================================
           # SWITCH CURRENT RELEASE
           # ========================================================
 
+          echo ""
+          echo "Switching current release..."
+
           ln -sfn \
             "$RELEASE_DIR" \
             "$APP_DIR/current"
 
+
+          echo ""
           echo "Current release:"
           readlink -f "$APP_DIR/current"
+
 
           # ========================================================
           # LOAD ENVIRONMENT
           # ========================================================
+
+          echo ""
+          echo "Loading production environment..."
 
           set -a
 
@@ -462,26 +810,21 @@ jobs:
 
           set +a
 
-          # ========================================================
-          # APPLICATION VALIDATION
-          # ========================================================
-
-          echo ""
-          echo "Application configuration:"
-
-          if [ -n "${PORT:-}" ]; then
-            echo "PORT configured."
-          else
-            echo "WARNING: PORT is not defined in .env"
-          fi
 
           # ========================================================
-          # START / RESTART PM2
+          # START APPLICATION
           # ========================================================
 
           cd "$APP_DIR/current"
 
+
+          echo ""
+          echo "Starting IRMS application..."
+
+
           if pm2 describe "$PM2_NAME" > /dev/null 2>&1; then
+
+            echo "Existing PM2 process found."
 
             echo "Restarting $PM2_NAME..."
 
@@ -489,6 +832,8 @@ jobs:
               --update-env
 
           else
+
+            echo "PM2 process does not exist."
 
             echo "Starting $PM2_NAME..."
 
@@ -498,46 +843,19 @@ jobs:
 
           fi
 
+
           # ========================================================
           # WAIT FOR APPLICATION
           # ========================================================
 
-          echo "Waiting for IRMS application..."
+          echo ""
+          echo "Waiting for application..."
 
           sleep 5
 
-          # ========================================================
-          # PM2 CHECK
-          # ========================================================
-
-          pm2 describe "$PM2_NAME"
 
           # ========================================================
-          # PM2 SAVE
-          # ========================================================
-
-          pm2 save
-
-          # ========================================================
-          # REMOVE UPLOADED PACKAGE
-          # ========================================================
-
-          rm -f "$PACKAGE"
-
-          echo "Uploaded package removed."
-
-          # ========================================================
-          # RELEASE CLEANUP
-          # ========================================================
-
-          cd "$RELEASES_DIR"
-
-          ls -1dt */ 2>/dev/null \
-            | tail -n +6 \
-            | xargs -r rm -rf
-
-          # ========================================================
-          # FINAL VERIFICATION
+          # PM2 STATUS
           # ========================================================
 
           echo ""
@@ -547,6 +865,67 @@ jobs:
 
           pm2 status
 
+
+          echo ""
+          echo "=========================================="
+          echo "PM2 DETAILS"
+          echo "=========================================="
+
+          pm2 describe "$PM2_NAME"
+
+
+          # ========================================================
+          # SAVE PM2 PROCESS LIST
+          # ========================================================
+
+          echo ""
+          echo "Saving PM2 process list..."
+
+          pm2 save
+
+
+          # ========================================================
+          # REMOVE DEPLOYMENT PACKAGE
+          # ========================================================
+
+          echo ""
+          echo "Removing uploaded package..."
+
+          rm -f "$PACKAGE"
+
+
+          # ========================================================
+          # CLEAN OLD RELEASES
+          #
+          # Keep latest 5 releases.
+          # ========================================================
+
+          echo ""
+          echo "Cleaning old releases..."
+
+          cd "$RELEASES_DIR"
+
+          ls -1dt */ 2>/dev/null \
+            | tail -n +6 \
+            | xargs -r rm -rf
+
+
+          # ========================================================
+          # SHOW RELEASES
+          # ========================================================
+
+          echo ""
+          echo "=========================================="
+          echo "AVAILABLE RELEASES"
+          echo "=========================================="
+
+          ls -lah "$RELEASES_DIR"
+
+
+          # ========================================================
+          # SHOW CURRENT RELEASE
+          # ========================================================
+
           echo ""
           echo "=========================================="
           echo "CURRENT RELEASE"
@@ -554,9 +933,69 @@ jobs:
 
           readlink -f "$APP_DIR/current"
 
+
+          # ========================================================
+          # FINAL PM2 STATUS
+          # ========================================================
+
           echo ""
           echo "=========================================="
-          echo "IRMS DEPLOYMENT COMPLETED"
+          echo "FINAL PM2 STATUS"
+          echo "=========================================="
+
+          pm2 status
+
+
+          # ========================================================
+          # DEPLOYMENT COMPLETE
+          # ========================================================
+
+          echo ""
+          echo "=========================================="
+          echo "IRMS DEPLOYMENT COMPLETED SUCCESSFULLY"
           echo "=========================================="
 
           REMOTE_SCRIPT
+
+
+      # ============================================================
+      # 23. FINAL DEPLOYMENT CHECK
+      # ============================================================
+
+      - name: Final Deployment Verification
+        env:
+          AWS_HOST: ${{ secrets.AWS_HOST }}
+          AWS_USER: ${{ secrets.AWS_USER }}
+        shell: bash
+        run: |
+          set -e
+
+          echo "=========================================="
+          echo "FINAL IRMS DEPLOYMENT VERIFICATION"
+          echo "=========================================="
+
+          ssh \
+            -i ~/.ssh/github_actions \
+            -o StrictHostKeyChecking=yes \
+            "${AWS_USER}@${AWS_HOST}" \
+            "
+              echo '--- Current release ---'
+              readlink -f /srv/apps/irms/current
+
+              echo ''
+              echo '--- PM2 status ---'
+              pm2 status
+
+              echo ''
+              echo '--- Application files ---'
+              test -f /srv/apps/irms/current/dist/main.js
+              test -f /srv/apps/irms/current/client/index.html
+
+              echo ''
+              echo 'IRMS deployment verification completed.'
+            "
+
+          echo ""
+          echo "=========================================="
+          echo "GITHUB ACTION COMPLETED"
+          echo "=========================================="
