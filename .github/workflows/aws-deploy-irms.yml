@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+
   workflow_dispatch:
 
 concurrency:
@@ -16,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       # ============================================================
       # CHECKOUT
       # ============================================================
@@ -57,13 +59,17 @@ jobs:
 
       - name: Install Frontend Dependencies
         working-directory: ./frontend
-        run: npm install
+        run: |
+          set -e
+          npm install
 
       - name: Build Frontend Web App
         working-directory: ./frontend
         env:
           VITE_APP_VERSION: ${{ github.sha }}
-        run: npm run build
+        run: |
+          set -e
+          npm run build
 
       # ============================================================
       # CAPACITOR / ANDROID APK
@@ -71,20 +77,34 @@ jobs:
 
       - name: Sync Capacitor
         working-directory: ./frontend
-        run: npx cap sync android
+        run: |
+          set -e
+          npx cap sync android
 
       - name: Make Gradle Executable
         working-directory: ./frontend/android
-        run: chmod +x gradlew
+        run: |
+          set -e
+          chmod +x gradlew
 
       - name: Build Android APK
         working-directory: ./frontend/android
-        run: ./gradlew assembleDebug
+        run: |
+          set -e
+          ./gradlew assembleDebug
 
       - name: Copy APK to Web App
         run: |
-          cp frontend/android/app/build/outputs/apk/debug/app-debug.apk \
-             frontend/dist/irms.apk
+          set -e
+
+          APK="frontend/android/app/build/outputs/apk/debug/app-debug.apk"
+
+          test -f "$APK"
+
+          cp "$APK" frontend/dist/irms.apk
+
+          echo "APK copied successfully:"
+          ls -lh frontend/dist/irms.apk
 
       # ============================================================
       # BACKEND
@@ -92,11 +112,15 @@ jobs:
 
       - name: Install Backend Dependencies
         working-directory: ./backend
-        run: npm install
+        run: |
+          set -e
+          npm install
 
       - name: Build Backend
         working-directory: ./backend
-        run: npm run build
+        run: |
+          set -e
+          npm run build
 
       # ============================================================
       # CREATE DEPLOYMENT CONTENT
@@ -106,28 +130,44 @@ jobs:
         run: |
           set -e
 
-          echo "Preparing IRMS deployment..."
+          echo "=========================================="
+          echo "Preparing IRMS deployment artifact"
+          echo "Commit: ${{ github.sha }}"
+          echo "=========================================="
 
-          # Frontend → NestJS client directory
+          # --------------------------------------------------------
+          # Frontend -> NestJS client directory
+          # --------------------------------------------------------
+
           rm -rf backend/client
           mkdir -p backend/client
 
           cp -R frontend/dist/. backend/client/
 
+          # --------------------------------------------------------
           # Version information
-          echo "{\"version\":\"${{ github.sha }}\"}" \
+          # --------------------------------------------------------
+
+          echo '{"version":"${{ github.sha }}"}' \
             > backend/client/version.json
 
+          # --------------------------------------------------------
           # OTA update package
+          # --------------------------------------------------------
+
           cd backend/client
+
           zip -r update.zip . -x "update.zip"
 
           cd ../..
 
-          # Deployment package
+          # --------------------------------------------------------
+          # Main deployment package
+          # --------------------------------------------------------
+
           cd backend
 
-          zip -r ../irms-${{ github.sha }}.zip \
+          zip -r "../irms-${{ github.sha }}.zip" \
             dist \
             client \
             prisma \
@@ -140,31 +180,120 @@ jobs:
 
           cd ..
 
-          echo "Deployment package:"
-          ls -lh irms-${{ github.sha }}.zip
+          # --------------------------------------------------------
+          # Validate package
+          # --------------------------------------------------------
+
+          PACKAGE="irms-${{ github.sha }}.zip"
+
+          test -f "$PACKAGE"
+
+          echo ""
+          echo "=========================================="
+          echo "DEPLOYMENT PACKAGE"
+          echo "=========================================="
+
+          ls -lh "$PACKAGE"
+
+          echo ""
+          echo "Package size:"
+          du -h "$PACKAGE"
 
       # ============================================================
-      # SSH
+      # CONFIGURE SSH
       # ============================================================
 
       - name: Configure SSH
+        env:
+          AWS_SSH_KEY: ${{ secrets.AWS_SSH_KEY }}
+          AWS_KNOWN_HOSTS: ${{ secrets.AWS_KNOWN_HOSTS }}
         shell: bash
         run: |
+          set -e
+
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          printf '%s\n' "${{ secrets.AWS_SSH_KEY }}" \
-            > ~/.ssh/github_actions
+          printf '%s\n' "$AWS_SSH_KEY" > ~/.ssh/github_actions
 
           chmod 600 ~/.ssh/github_actions
 
-          printf '%s\n' "${{ secrets.AWS_KNOWN_HOSTS }}" \
-            > ~/.ssh/known_hosts
+          printf '%s\n' "$AWS_KNOWN_HOSTS" > ~/.ssh/known_hosts
 
           chmod 644 ~/.ssh/known_hosts
 
+          echo "SSH configuration created."
+
       # ============================================================
-      # UPLOAD
+      # VERIFY AWS CONFIGURATION
+      # ============================================================
+
+      - name: Verify AWS Deployment Configuration
+        env:
+          AWS_HOST: ${{ secrets.AWS_HOST }}
+          AWS_USER: ${{ secrets.AWS_USER }}
+        run: |
+          set -e
+
+          test -n "$AWS_HOST" || {
+            echo "ERROR: AWS_HOST secret is missing"
+            exit 1
+          }
+
+          test -n "$AWS_USER" || {
+            echo "ERROR: AWS_USER secret is missing"
+            exit 1
+          }
+
+          test -f ~/.ssh/github_actions || {
+            echo "ERROR: SSH private key was not created"
+            exit 1
+          }
+
+          test -s ~/.ssh/known_hosts || {
+            echo "ERROR: known_hosts is empty"
+            exit 1
+          }
+
+          echo "AWS deployment configuration is present."
+
+      # ============================================================
+      # TEST SSH CONNECTION
+      # ============================================================
+
+      - name: Test SSH Connection
+        env:
+          AWS_HOST: ${{ secrets.AWS_HOST }}
+          AWS_USER: ${{ secrets.AWS_USER }}
+        run: |
+          set -e
+
+          ssh \
+            -i ~/.ssh/github_actions \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            "${AWS_USER}@${AWS_HOST}" \
+            "echo 'SSH connection successful'"
+
+      # ============================================================
+      # PREPARE EC2 DEPLOYMENT DIRECTORY
+      # ============================================================
+
+      - name: Prepare EC2 Deployment Directory
+        env:
+          AWS_HOST: ${{ secrets.AWS_HOST }}
+          AWS_USER: ${{ secrets.AWS_USER }}
+        run: |
+          set -e
+
+          ssh \
+            -i ~/.ssh/github_actions \
+            -o StrictHostKeyChecking=yes \
+            "${AWS_USER}@${AWS_HOST}" \
+            "mkdir -p /home/ubuntu/deploy && chmod 700 /home/ubuntu/deploy"
+
+      # ============================================================
+      # UPLOAD DEPLOYMENT PACKAGE
       # ============================================================
 
       - name: Upload Deployment Package
@@ -175,139 +304,257 @@ jobs:
           set -e
 
           PACKAGE="irms-${{ github.sha }}.zip"
+
+          test -f "$PACKAGE"
+
+          echo "Uploading:"
           ls -lh "$PACKAGE"
 
           scp \
             -i ~/.ssh/github_actions \
             -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
             "$PACKAGE" \
-            "${AWS_USER}@${AWS_HOST}:/tmp/"
+            "${AWS_USER}@${AWS_HOST}:/home/ubuntu/deploy/"
+
+          echo "Upload completed successfully."
+
+      # ============================================================
+      # VERIFY UPLOAD
+      # ============================================================
+
+      - name: Verify Uploaded Package
+        env:
+          AWS_HOST: ${{ secrets.AWS_HOST }}
+          AWS_USER: ${{ secrets.AWS_USER }}
+        run: |
+          set -e
+
+          ssh \
+            -i ~/.ssh/github_actions \
+            -o StrictHostKeyChecking=yes \
+            "${AWS_USER}@${AWS_HOST}" \
+            "ls -lh /home/ubuntu/deploy/irms-${{ github.sha }}.zip"
 
       # ============================================================
       # DEPLOY ON EC2
       # ============================================================
 
       - name: Deploy IRMS on AWS
+        env:
+          AWS_HOST: ${{ secrets.AWS_HOST }}
+          AWS_USER: ${{ secrets.AWS_USER }}
         run: |
+          set -e
+
           ssh \
             -i ~/.ssh/github_actions \
             -o StrictHostKeyChecking=yes \
-            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} \
+            "${AWS_USER}@${AWS_HOST}" \
             "GITHUB_SHA=${{ github.sha }} bash -s" <<'REMOTE_SCRIPT'
 
           set -e
 
+          # ========================================================
+          # APPLICATION VARIABLES
+          # ========================================================
+
           APP_NAME="irms"
           APP_DIR="/srv/apps/irms"
-          RELEASE_DIR="$APP_DIR/releases/$GITHUB_SHA"
-          PACKAGE="/tmp/irms-$GITHUB_SHA.zip"
+
+          RELEASES_DIR="$APP_DIR/releases"
+          SHARED_DIR="$APP_DIR/shared"
+
+          RELEASE_DIR="$RELEASES_DIR/$GITHUB_SHA"
+
+          PACKAGE="/home/ubuntu/deploy/irms-$GITHUB_SHA.zip"
+
           PM2_NAME="irms-api"
 
+          # ========================================================
+          # START
+          # ========================================================
+
+          echo ""
           echo "=========================================="
-          echo "Deploying IRMS"
-          echo "Commit: $GITHUB_SHA"
-          echo "Release: $RELEASE_DIR"
+          echo "IRMS AWS DEPLOYMENT"
+          echo "=========================================="
+          echo "Commit:       $GITHUB_SHA"
+          echo "Application:  $APP_NAME"
+          echo "Release:      $RELEASE_DIR"
+          echo "Package:      $PACKAGE"
           echo "=========================================="
 
-          # ----------------------------------------------------------
-          # Create release directory
-          # ----------------------------------------------------------
+          # ========================================================
+          # VALIDATE PACKAGE
+          # ========================================================
+
+          test -f "$PACKAGE"
+
+          echo "Deployment package found:"
+          ls -lh "$PACKAGE"
+
+          # ========================================================
+          # CREATE APPLICATION DIRECTORIES
+          # ========================================================
+
+          mkdir -p "$RELEASES_DIR"
+          mkdir -p "$SHARED_DIR"
+
+          # ========================================================
+          # CREATE RELEASE DIRECTORY
+          # ========================================================
+
+          rm -rf "$RELEASE_DIR"
 
           mkdir -p "$RELEASE_DIR"
 
-          # ----------------------------------------------------------
-          # Extract deployment
-          # ----------------------------------------------------------
+          # ========================================================
+          # EXTRACT
+          # ========================================================
+
+          echo "Extracting deployment package..."
 
           unzip -q "$PACKAGE" -d "$RELEASE_DIR"
 
-          # ----------------------------------------------------------
-          # Verify release
-          # ----------------------------------------------------------
+          # ========================================================
+          # VERIFY RELEASE
+          # ========================================================
+
+          echo "Verifying release..."
 
           test -f "$RELEASE_DIR/dist/main.js"
           test -f "$RELEASE_DIR/package.json"
           test -f "$RELEASE_DIR/client/index.html"
 
-          echo "Release verified."
+          echo "Release verification successful."
 
-          # ----------------------------------------------------------
-          # Attach production environment
-          # ----------------------------------------------------------
+          # ========================================================
+          # PRODUCTION ENVIRONMENT
+          # ========================================================
 
-          ln -sfn "$APP_DIR/shared/.env" \
+          test -f "$SHARED_DIR/.env"
+
+          ln -sfn \
+            "$SHARED_DIR/.env" \
             "$RELEASE_DIR/.env"
 
-          # ----------------------------------------------------------
-          # Switch current release
-          # ----------------------------------------------------------
+          echo "Production environment linked."
 
-          ln -sfn "$RELEASE_DIR" \
+          # ========================================================
+          # SWITCH CURRENT RELEASE
+          # ========================================================
+
+          ln -sfn \
+            "$RELEASE_DIR" \
             "$APP_DIR/current"
 
-          # ----------------------------------------------------------
-          # Load production environment
-          # ----------------------------------------------------------
+          echo "Current release:"
+          readlink -f "$APP_DIR/current"
+
+          # ========================================================
+          # LOAD ENVIRONMENT
+          # ========================================================
 
           set -a
-          source "$APP_DIR/shared/.env"
+
+          source "$SHARED_DIR/.env"
+
           set +a
 
-          # ----------------------------------------------------------
-          # Restart / Start PM2
-          # ----------------------------------------------------------
+          # ========================================================
+          # APPLICATION VALIDATION
+          # ========================================================
+
+          echo ""
+          echo "Application configuration:"
+
+          if [ -n "${PORT:-}" ]; then
+            echo "PORT configured."
+          else
+            echo "WARNING: PORT is not defined in .env"
+          fi
+
+          # ========================================================
+          # START / RESTART PM2
+          # ========================================================
 
           cd "$APP_DIR/current"
 
           if pm2 describe "$PM2_NAME" > /dev/null 2>&1; then
+
             echo "Restarting $PM2_NAME..."
-            pm2 restart "$PM2_NAME" --update-env
+
+            pm2 restart "$PM2_NAME" \
+              --update-env
+
           else
+
             echo "Starting $PM2_NAME..."
 
             pm2 start dist/main.js \
               --name "$PM2_NAME" \
               --cwd "$APP_DIR/current"
+
           fi
 
-          # ----------------------------------------------------------
-          # Save PM2 process list
-          # ----------------------------------------------------------
+          # ========================================================
+          # WAIT FOR APPLICATION
+          # ========================================================
+
+          echo "Waiting for IRMS application..."
+
+          sleep 5
+
+          # ========================================================
+          # PM2 CHECK
+          # ========================================================
+
+          pm2 describe "$PM2_NAME"
+
+          # ========================================================
+          # PM2 SAVE
+          # ========================================================
 
           pm2 save
 
-          # ----------------------------------------------------------
-          # Cleanup uploaded package
-          # ----------------------------------------------------------
+          # ========================================================
+          # REMOVE UPLOADED PACKAGE
+          # ========================================================
 
           rm -f "$PACKAGE"
 
-          # ----------------------------------------------------------
-          # Keep latest 5 releases
-          # ----------------------------------------------------------
+          echo "Uploaded package removed."
 
-          cd "$APP_DIR/releases"
+          # ========================================================
+          # RELEASE CLEANUP
+          # ========================================================
+
+          cd "$RELEASES_DIR"
 
           ls -1dt */ 2>/dev/null \
             | tail -n +6 \
             | xargs -r rm -rf
 
-          # ----------------------------------------------------------
-          # Deployment verification
-          # ----------------------------------------------------------
+          # ========================================================
+          # FINAL VERIFICATION
+          # ========================================================
 
+          echo ""
           echo "=========================================="
           echo "PM2 STATUS"
           echo "=========================================="
 
           pm2 status
 
+          echo ""
           echo "=========================================="
           echo "CURRENT RELEASE"
           echo "=========================================="
 
           readlink -f "$APP_DIR/current"
 
+          echo ""
           echo "=========================================="
           echo "IRMS DEPLOYMENT COMPLETED"
           echo "=========================================="
