@@ -168,12 +168,20 @@ jobs:
       # ============================================================
 
       - name: Upload Deployment Package
+        env:
+          AWS_HOST: ${{ secrets.AWS_HOST }}
+          AWS_USER: ${{ secrets.AWS_USER }}
         run: |
+          set -e
+
+          PACKAGE="irms-${{ github.sha }}.zip"
+          ls -lh "$PACKAGE"
+
           scp \
             -i ~/.ssh/github_actions \
             -o StrictHostKeyChecking=yes \
-            irms-${{ github.sha }}.zip \
-            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:/tmp/
+            "$PACKAGE" \
+            "${AWS_USER}@${AWS_HOST}:/tmp/"
 
       # ============================================================
       # DEPLOY ON EC2
