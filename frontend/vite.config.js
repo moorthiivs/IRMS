@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 export default defineConfig({
+    base: '/irms/',
     plugins: [react()],
     resolve: {
         alias: {
@@ -10,8 +11,26 @@ export default defineConfig({
     },
     server: {
         proxy: {
+            '/irms/api': {
+                target: 'http://127.0.0.1:5001',
+                changeOrigin: true,
+                rewrite: function (path) { return path.replace(/^\/irms/, ''); },
+            },
             '/api': {
-                target: 'http://127.0.0.1:3000',
+                target: 'http://127.0.0.1:5001',
+                changeOrigin: true,
+            },
+        },
+    },
+    preview: {
+        proxy: {
+            '/irms/api': {
+                target: 'http://127.0.0.1:5001',
+                changeOrigin: true,
+                rewrite: function (path) { return path.replace(/^\/irms/, ''); },
+            },
+            '/api': {
+                target: 'http://127.0.0.1:5001',
                 changeOrigin: true,
             },
         },

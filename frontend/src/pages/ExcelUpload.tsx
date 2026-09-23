@@ -93,7 +93,7 @@ export function ExcelUpload({ onUploadSuccess }: { onUploadSuccess?: () => void 
 
   const handleDownloadTemplate = async () => {
     try {
-      const response = await fetch('/upload_template.xlsx');
+      const response = await fetch(`${import.meta.env.BASE_URL}upload_template.xlsx`);
       if (!response.ok) throw new Error('Template file not found');
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);

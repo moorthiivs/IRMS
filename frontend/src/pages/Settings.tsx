@@ -79,16 +79,8 @@ export function Settings() {
 
   const checkVersion = async () => {
     try {
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-      let origin = '';
-      try {
-        const urlObj = new URL(baseUrl);
-        origin = urlObj.origin;
-      } catch (e) {
-        origin = 'https://irms-gzasfnghh6g2b3hu.centralindia-01.azurewebsites.net';
-      }
-
-      const res = await fetch(`${origin}/version.json?t=${Date.now()}`);
+      const versionUrl = `${import.meta.env.BASE_URL}version.json?t=${Date.now()}`;
+      const res = await fetch(versionUrl);
       if (!res.ok) return;
 
       const data = await res.json();

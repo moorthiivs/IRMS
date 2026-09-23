@@ -50,7 +50,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       <MantineProvider theme={theme} defaultColorScheme="light">
         <Notifications position="top-right" zIndex={1000} />
         <ModalsProvider>
-          <BrowserRouter>
+          <BrowserRouter basename="/irms">
             {children}
           </BrowserRouter>
         </ModalsProvider>

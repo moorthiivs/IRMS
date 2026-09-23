@@ -8,7 +8,11 @@ export interface OfflineInspection {
   lotNumber: string;
 }
 
-const API_BASE = '/api';
+const rawApiBase =
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_URL ||
+  '/api';
+const API_BASE = rawApiBase.replace(/\/+$/, '');
 
 export const getAuthToken = () => localStorage.getItem('irms_token');
 export const setAuthToken = (token: string) => localStorage.setItem('irms_token', token);
@@ -38,8 +42,9 @@ export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
     removeAuthToken();
     removeAuthUser();
     // Redirect if in browser environment and not on login page
+    const loginPath = `${import.meta.env.BASE_URL}login`;
     if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-      window.location.href = '/login';
+      window.location.href = loginPath;
     }
     throw new Error('Unauthorized');
   }

@@ -37,17 +37,18 @@ export function OTAUpdater() {
 
   const checkForUpdates = async (forceShow = false) => {
     try {
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '/api';
       let origin = '';
       try {
-        const urlObj = new URL(baseUrl);
+        const urlObj = new URL(baseUrl, window.location.origin);
         origin = urlObj.origin;
       } catch (e) {
-        origin = 'https://irms-gzasfnghh6g2b3hu.centralindia-01.azurewebsites.net';
+        origin = window.location.origin;
       }
       setOriginUrl(origin);
 
-      const res = await fetch(`${origin}/version.json?t=${Date.now()}`);
+      const versionUrl = `${import.meta.env.BASE_URL}version.json?t=${Date.now()}`;
+      const res = await fetch(versionUrl);
       if (!res.ok) return;
       
       const data = await res.json();
@@ -78,8 +79,9 @@ export function OTAUpdater() {
         withCloseButton: false,
       });
 
+      const updateUrl = new URL(`${import.meta.env.BASE_URL}update.zip`, originUrl || window.location.origin).toString();
       const versionInfo = await CapacitorUpdater.download({
-        url: `${originUrl}/update.zip`,
+        url: updateUrl,
         version: remoteVersion,
       });
       
@@ -124,7 +126,7 @@ export function OTAUpdater() {
             className="mb-10 w-full max-w-sm"
           >
             <img 
-              src="/update_illustration.png" 
+              src={`${import.meta.env.BASE_URL}update_illustration.png`} 
               alt="Update App" 
               className="w-full h-auto object-contain drop-shadow-sm" 
               onError={(e) => {

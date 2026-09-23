@@ -105,7 +105,7 @@ export function PokaYokeExcelUpload({ onUploadSuccess }: { onUploadSuccess?: () 
 
   const handleDownloadTemplate = async () => {
     try {
-      const response = await fetch('/upload_poka_yoke.xlsx');
+      const response = await fetch(`${import.meta.env.BASE_URL}upload_poka_yoke.xlsx`);
       if (!response.ok) throw new Error('Template file not found');
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);

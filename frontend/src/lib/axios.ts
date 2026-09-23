@@ -1,8 +1,14 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/auth-store';
 
+const rawApiBase =
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_URL ||
+  '/api';
+const API_BASE_URL = rawApiBase.replace(/\/+$/, '');
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -26,7 +32,8 @@ api.interceptors.response.use(
   (error) => {
     if (error.response && error.response.status === 401) {
       useAuthStore.getState().logout();
-      window.location.href = '/login';
+      const loginPath = `${import.meta.env.BASE_URL}login`;
+      window.location.href = loginPath;
     }
     return Promise.reject(error);
   }

@@ -58,7 +58,7 @@ export function Login() {
         
         <div className="z-10 text-center text-white max-w-lg flex flex-col items-center">
           <div className="bg-white dark:bg-[#25262b] p-4 rounded-2xl shadow-2xl mb-8 transform transition-transform hover:scale-105 duration-300">
-            <img src="/logo.png" alt="IRMS Logo" className="w-32 h-auto rounded-lg" />
+            <img src={`${import.meta.env.BASE_URL}logo.png`} alt="IRMS Logo" className="w-32 h-auto rounded-lg" />
           </div>
           <h1 className="text-4xl font-bold mb-4 tracking-tight">Inspection & Reporting Management System</h1>
           <p className="text-blue-200 text-lg">
@@ -71,7 +71,7 @@ export function Login() {
       <div className="flex-1 flex flex-col justify-center items-center p-8 sm:p-12 relative">
         <div className="w-full max-w-md">
           <div className="lg:hidden mb-8 flex justify-center">
-             <img src="/logo.png" alt="IRMS Logo" className="w-24 h-auto rounded-xl shadow-lg" />
+             <img src={`${import.meta.env.BASE_URL}logo.png`} alt="IRMS Logo" className="w-24 h-auto rounded-xl shadow-lg" />
           </div>
 
           <Title order={2} className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2" ta="center">
@@ -128,7 +128,7 @@ export function Login() {
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-green-500 rounded-2xl blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
                 
                 <a 
-                  href="/irms.apk" 
+                  href={`${import.meta.env.BASE_URL}irms.apk`} 
                   download
                   className="relative flex items-center justify-center gap-4 px-8 py-3.5 bg-black text-white rounded-2xl transition-all duration-300 w-full min-w-[240px] border border-white/10 overflow-hidden shadow-2xl"
                 >
